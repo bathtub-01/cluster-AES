@@ -15,7 +15,7 @@ class SubBytes() extends Module {
   val sboxs = Seq.fill(16)(Module(new AESSBox))
   for (i <- 0 until 16) {
       sboxs(i).io.in := io.para_in.state(i)
-      io.para_out.state(i) := ShiftRegister(sboxs(i).io.out, 3) // delay 1 clk, indeed!
+      io.para_out.state(i) := ShiftRegister(sboxs(i).io.out, 1) // delay 1 clk, indeed!
   }
   
   io.para_out.control := ShiftRegisterInit(io.para_in.control, pipeline_layer,

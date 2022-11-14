@@ -11,9 +11,11 @@ class AESSBox extends Module {
   })
 
   val enc = SBoxAESEncIn(io.in)
+  val r1 = RegNext(enc, enc)
   //val dec = SBoxAESDecIn(io.in)
-  val mid = SBoxMid(enc)
-  io.out := SBoxAESEncOut(mid)
+  val mid = SBoxMid(r1)
+  val r2 = RegNext(mid, mid)
+  io.out := SBoxAESEncOut(r2)
   //val mid = SBoxMid(Mux(io.isEnc, enc, dec))
   //io.out := Mux(io.isEnc, SBoxAESEncOut(mid), SBoxAESDecOut(mid))
 }
