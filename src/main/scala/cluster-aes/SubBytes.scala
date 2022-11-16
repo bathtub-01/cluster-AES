@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 
 // For now only consider encryption
-class SubBytes() extends Module {
+class SubBytes extends Module {
   val pipeline_layer = 3
   val io = IO(new Bundle {
     val para_in = Input(new Para)
@@ -37,20 +37,21 @@ class SubBytes() extends Module {
 
 class amod extends Module  {
   val io = IO(new Bundle {
-    val para_in = Input(new Para)
-    val para_out = Output(new Para)
+    val input1 = Input(Vec(2, UInt(2.W)))
+    val input2 = Input(Vec(2, UInt(2.W)))
+    val output1 = Output(Vec(4, UInt(2.W)))
+    val output2 = Output(Bool())
    })
-
-  val IdleValue = Wire(new ControlInfomation)
-  IdleValue.isIdle := true.B
-  IdleValue.keylength := 0.U
-  IdleValue.taskID := 0.U
-  IdleValue.rounds := 5.U
   
-  io.para_out.state := io.para_in.state
-  io.para_out.control := (new ControlInfomation).Lit(_.rounds -> (IdleValue.rounds.asUInt + 1.U))
+  val w0 = io.input1.asUInt
+  val w1 = io.input2.asUInt
+  // reassignment is allowed in chisel??
+  io.output1 := Seq(w0.asTypeOf(Vec(2, UInt(2.W))), w1.asTypeOf(Vec(2, UInt(2.W)))).flatten
+  io.output1 := Seq(w0.asTypeOf(Vec(2, UInt(2.W))), w0.asTypeOf(Vec(2, UInt(2.W)))).flatten
+  io.output2 := true.B
+  io.output2 := false.B
 }
 
-object Mymain extends App {
-  emitVerilog(new amod, Array("--target-dir", "generated"))
-}
+// object Mymain extends App {
+//   emitVerilog(new amod, Array("--target-dir", "generated"))
+// }

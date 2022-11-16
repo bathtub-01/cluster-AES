@@ -28,9 +28,6 @@ object ShiftRegisterInit {
   }
 }
 
-object IdleValue extends Module {
-
-}
 // class ControlInfomation extends Bundle {
 //   val isIdle_in = Input(Bool())
 //   val isIdle_out = Output(Bool())
