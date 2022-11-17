@@ -16,12 +16,12 @@ class KeyExpansionTest extends AnyFlatSpec with ChiselScalatestTester {
                           0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 
                           0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f)
     test(new KeyExpansion).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
-      dut.clock.step(7)
+      dut.clock.step(3)
 
       for(i <- 0 until 32){
         dut.io.user_key.bits(i).poke(user_key1(i))
       }
-      dut.io.keylength.poke(0.U)
+      dut.io.keylength.poke(2.U)
       dut.io.taskID.poke(0.U)
       dut.io.user_key.valid.poke(true.B)
       dut.clock.step(4)
@@ -29,38 +29,16 @@ class KeyExpansionTest extends AnyFlatSpec with ChiselScalatestTester {
 
       dut.clock.step()
 
-      for(i <- 0 until 32){
-        dut.io.user_key.bits(i).poke(user_key2(i))
-      }
-      dut.io.keylength.poke(0.U)
-      dut.io.taskID.poke(3.U)
-      dut.io.user_key.valid.poke(true.B)
-      dut.clock.step(4)
-      dut.io.user_key.valid.poke(false.B)
+      // for(i <- 0 until 32){
+      //   dut.io.user_key.bits(i).poke(user_key2(i))
+      // }
+      // dut.io.keylength.poke(0.U)
+      // dut.io.taskID.poke(3.U)
+      // dut.io.user_key.valid.poke(true.B)
+      // dut.clock.step(4)
+      // dut.io.user_key.valid.poke(false.B)
 
-      dut.clock.step(50)
-
-      for(i <- 0 until 32){
-        dut.io.user_key.bits(i).poke(user_key2(i))
-      }
-      dut.io.keylength.poke(0.U)
-      dut.io.taskID.poke(0.U)
-      dut.io.user_key.valid.poke(true.B)
-      dut.clock.step(4)
-      dut.io.user_key.valid.poke(false.B)
-
-      dut.clock.step()
-
-      for(i <- 0 until 32){
-        dut.io.user_key.bits(i).poke(user_key1(i))
-      }
-      dut.io.keylength.poke(0.U)
-      dut.io.taskID.poke(3.U)
-      dut.io.user_key.valid.poke(true.B)
-      dut.clock.step(4)
-      dut.io.user_key.valid.poke(false.B)
-
-      dut.clock.step(50)
+      dut.clock.step(60)
     }
   }
 }

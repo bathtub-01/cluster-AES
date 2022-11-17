@@ -7,16 +7,9 @@ import chisel3.experimental.BundleLiterals._
 
 class AES extends Module {
   val io = IO(new Bundle {
-    //val plaintext = Input(Vec(16, UInt(8.W)))
     val input = Flipped(Decoupled(new Para))
-    //val para_in = Input(new Para)
-    //val roundKey = Input(Vec(16, UInt(8.W)))
-    //val busy = Output(Bool())
-    //val start = Input(Bool())
     val output = ValidIO(Vec(16, UInt(8.W)))
     val complete_taskID = Output(UInt(2.W))
-    //val state_out = Output(Vec(16, UInt(8.W)))
-    //val state_out_valid = Output(Bool())
   })
 
   val IdleValue = Wire(new Para)
@@ -26,7 +19,6 @@ class AES extends Module {
   IdleValue.control.taskID := 0.U
   IdleValue.control.rounds := 0.U
 
-  // BUG: TmpValue.isIdle is always zero
   val TmpValue = Wire(new Para)
   val RoundAddsOne = Wire(new Para)
 
@@ -39,7 +31,7 @@ class AES extends Module {
 
   def isFinalRound(keylength: UInt, rounds: UInt): Bool = (rounds - 10.U) / 2.U === keylength
 
-  // Need to do this in a nicer way...
+  // Need to do this in a nicer way... maybe reassignment?
   RoundAddsOne.state := AddRoundKeyModule.io.para_out.state
   RoundAddsOne.control.isIdle := AddRoundKeyModule.io.para_out.control.isIdle
   RoundAddsOne.control.keylength := AddRoundKeyModule.io.para_out.control.keylength

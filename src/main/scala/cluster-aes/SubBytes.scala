@@ -37,21 +37,19 @@ class SubBytes extends Module {
 
 class amod extends Module  {
   val io = IO(new Bundle {
-    val input1 = Input(Vec(2, UInt(2.W)))
-    val input2 = Input(Vec(2, UInt(2.W)))
-    val output1 = Output(Vec(4, UInt(2.W)))
-    val output2 = Output(Bool())
+    val write = Input(Bool())
+    val input = Input(UInt(2.W))
+    val output = Output(UInt(2.W))
    })
   
-  val w0 = io.input1.asUInt
-  val w1 = io.input2.asUInt
-  // reassignment is allowed in chisel??
-  io.output1 := Seq(w0.asTypeOf(Vec(2, UInt(2.W))), w1.asTypeOf(Vec(2, UInt(2.W)))).flatten
-  io.output1 := Seq(w0.asTypeOf(Vec(2, UInt(2.W))), w0.asTypeOf(Vec(2, UInt(2.W)))).flatten
-  io.output2 := true.B
-  io.output2 := false.B
+   when(io.write) {
+    io.output := io.input + 1.U
+   }.otherwise {
+    io.output := io.input + 1.U
+   }
+
 }
 
-// object Mymain extends App {
-//   emitVerilog(new amod, Array("--target-dir", "generated"))
-// }
+object Mymain extends App {
+  emitVerilog(new amod, Array("--target-dir", "generated"))
+}
