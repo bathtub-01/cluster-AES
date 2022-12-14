@@ -6,14 +6,14 @@ import chisel3.experimental.BundleLiterals._
 
 // For now only consider encryption.
 
-class MixColumns extends Module {
+class MixColumns(isEnc: Boolean) extends Module {
   val pipeline_layer = 1
   val io = IO(new Bundle {
     val para_in = Input(new Para)
     val para_out = Output(new Para)
   })
 
-  val pms = Seq.fill(4)(Module(new PolyMul))
+  val pms = Seq.fill(4)(Module(new PolyMul(isEnc)))
   for (i <- 0 until 4) {
     for (j <- 0 until 4) {
       pms(i).io.in(j) := io.para_in.state(i * 4 + j)

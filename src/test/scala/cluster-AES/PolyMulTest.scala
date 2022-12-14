@@ -6,7 +6,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class PolyMulTest extends AnyFlatSpec with ChiselScalatestTester {
   "polymul" should "pass" in {
-    test(new PolyMul) { dut =>
+    test(new PolyMul(true)) { dut =>
       dut.io.in(0).poke(0xf2.U)
       dut.io.in(1).poke(0x4c.U)
       dut.io.in(2).poke(0xe7.U)

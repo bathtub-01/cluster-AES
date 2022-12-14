@@ -29,8 +29,8 @@ class GFMul(y: Int) extends Module {
 }
 
 // Input: 8-bit coefficient
-// Output: result coefficients for multiply 3x^2 + x^2 + x + 2, arranging by 4 terms
-class TermMul extends Module {
+// Output: result coefficients for multiply 3x^3 + x^2 + x + 2 or bx^3 + dx^2 + 9x + e, arranging by 4 terms
+class TermMul(isEnc: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(8.W))
     val out = Output(UInt(32.W))
@@ -42,11 +42,13 @@ class TermMul extends Module {
     m.io.out
   }
 
-  io.out := Cat(m(io.in, 3), io.in, io.in, m(io.in, 2))
+  val out = if(isEnc) Cat(m(io.in, 3), io.in, io.in, m(io.in, 2))
+              else Cat(m(io.in, 0xb), m(io.in, 0xd), m(io.in, 9), m(io.in, 0xe))
+  io.out := out
 }
 
 
-class PolyMul extends Module {
+class PolyMul(isEnc: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Input(Vec(4, UInt(8.W)))
     val out = Output(Vec(4, UInt(8.W)))
@@ -55,7 +57,7 @@ class PolyMul extends Module {
   def asBytes(in: UInt): Vec[UInt] = VecInit(in.asBools.grouped(8).map(VecInit(_).asUInt).toSeq)
   val tmp = io.in.zipWithIndex.map({
     case (b, i) => {
-      val m = Module(new TermMul)
+      val m = Module(new TermMul(isEnc))
       m.io.in := b
       m.io.out.rotateLeft(i * 8)
     }

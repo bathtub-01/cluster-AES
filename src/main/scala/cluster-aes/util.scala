@@ -10,8 +10,8 @@ class Para extends Bundle {
 
 class ControlInfomation extends Bundle {
   val isIdle = Bool()
-  // keylength: 0-128bit, 1-192bit, 2-256bit, 3-IdleValue
-  val keylength = UInt(2.W)
+  val enc = Bool()
+  val keylength = UInt(2.W) // 0-128bit, 1-192bit, 2-256bit
   val taskID = UInt(2.W)
   val rounds = UInt(4.W)
 }
@@ -27,28 +27,3 @@ object ShiftRegisterInit {
     }
   }
 }
-
-// class ControlInfomation extends Bundle {
-//   val isIdle_in = Input(Bool())
-//   val isIdle_out = Output(Bool())
-
-//   // keylength: 0-128bit, 1-192bit, 2-256bit, 3-IdleValue
-//   val keylength_in = Input(UInt(2.W))
-//   val keylength_out = Output(UInt(2.W))
-
-//   val taskID_in = Input(UInt(2.W))
-//   val taskID_out = Output(UInt(2.W))
-
-//   val rounds_in = Input(UInt(4.W))
-//   val rounds_out = Output(UInt(4.W))
-// }
-
-// object Bypass_CtrlInfo {
-//   def apply(cio: ControlInfomation, delay: Int): Int = {
-//     cio.isIdle_out := ShiftRegister(cio.isIdle_in, delay)
-//     cio.keylength_out := ShiftRegister(cio.keylength_in, delay)
-//     cio.taskID_out := ShiftRegister(cio.taskID_in, delay)
-//     cio.rounds_out := ShiftRegister(cio.rounds_in, delay)
-//     0
-//   }
-// }

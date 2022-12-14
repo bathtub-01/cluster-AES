@@ -5,10 +5,9 @@ import chisel3.util._
 import firrtl.FirrtlProtos.Firrtl.Statement.Register
 import chisel3.experimental.BundleLiterals._
 
-class AES extends Module {
+class AESEncModule extends Module {
   val io = IO(new Bundle {
     val input = Flipped(Decoupled(new Para))
-    val enc = Input(Bool())
     val output = ValidIO(Vec(16, UInt(8.W)))
     val complete_taskID = Output(UInt(2.W))
   })
@@ -16,7 +15,6 @@ class AES extends Module {
   val IdleValue = Wire(new Para)
   IdleValue.state := Seq.fill(16)(0.U(8.W))
   IdleValue.control.isIdle := true.B
-  IdleValue.control.enc := true.B
   IdleValue.control.keylength := 0.U
   IdleValue.control.taskID := 0.U
   IdleValue.control.rounds := 0.U
@@ -25,18 +23,14 @@ class AES extends Module {
   val RoundAddsOne = Wire(new Para)
 
   val AddRoundKeyModule = Module(new AddRoundKey)
-  val SubBytesModule = Module(new SubBytes)
-  val ShiftRowsModule = Module(new ShiftRows)
-  val MixColumnsModule = Module(new MixColumns)
+  val SubBytesModule = Module(new SubBytes(true))
+  val ShiftRowsModule = Module(new ShiftRows(true))
+  val MixColumnsModule = Module(new MixColumns(true))
 
   val Buffer = RegNext(ShiftRowsModule.io.para_out, IdleValue)
 
   def isFinalRound(keylength: UInt, rounds: UInt): Bool = (rounds - 10.U) / 2.U === keylength
 
-  // RoundAddsOne.state := AddRoundKeyModule.io.para_out.state
-  // RoundAddsOne.control.isIdle := AddRoundKeyModule.io.para_out.control.isIdle
-  // RoundAddsOne.control.keylength := AddRoundKeyModule.io.para_out.control.keylength
-  // RoundAddsOne.control.taskID := AddRoundKeyModule.io.para_out.control.taskID
   RoundAddsOne := AddRoundKeyModule.io.para_out
   RoundAddsOne.control.rounds := AddRoundKeyModule.io.para_out.control.rounds + 1.U
 
@@ -57,11 +51,7 @@ class AES extends Module {
     AddRoundKeyModule.io.para_in := Mux(isFinalRound(Buffer.control.keylength, Buffer.control.rounds),
                                           Buffer, MixColumnsModule.io.para_out)
   }
-
-  // AddRoundKeyModule.io.para_in := Mux(Buffer.control.isIdle, io.input.bits,
-  //                                     Mux(isFinalRound(Buffer.control.keylength, Buffer.control.rounds),
-  //                                         Buffer, MixColumnsModule.io.para_out))
-  
+ 
   val expK128 = ROMeKeys.expandedKey128
   val expK192 = ROMeKeys.expandedKey192
   val expK256 = ROMeKeys.expandedKey256
@@ -85,7 +75,7 @@ class AES extends Module {
   io.output.valid := isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
                                   AddRoundKeyModule.io.para_out.control.rounds)
   io.complete_taskID := AddRoundKeyModule.io.para_out.control.taskID
-  // How to determine if a new input can come in?
+
   io.input.ready := Buffer.control.isIdle
 }
 

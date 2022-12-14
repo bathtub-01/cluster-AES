@@ -3,21 +3,19 @@ package clusterAES
 import chisel3._
 
 // TODO: insert more registers in this block maybe
-class AESSBox extends Module {
+class AESSBox(isEnc: Boolean) extends Module {
   val io = IO(new Bundle {
     //val isEnc = Input(Bool())
     val in = Input(UInt(8.W))
     val out = Output(UInt(8.W))
   })
 
-  val enc = SBoxAESEncIn(io.in)
-  val r1 = RegNext(enc, enc)
-  //val dec = SBoxAESDecIn(io.in)
+  val st1 = if(isEnc) SBoxAESEncIn(io.in) else SBoxAESDecIn(io.in)
+  val r1 = RegNext(st1, st1)
   val mid = SBoxMid(r1)
   val r2 = RegNext(mid, mid)
-  io.out := SBoxAESEncOut(r2)
-  //val mid = SBoxMid(Mux(io.isEnc, enc, dec))
-  //io.out := Mux(io.isEnc, SBoxAESEncOut(mid), SBoxAESDecOut(mid))
+  val out =  if(isEnc) SBoxAESEncOut(r2) else SBoxAESDecOut(r2)
+  io.out := out
 }
 
 // top (inner) linear layer for AES
