@@ -53,12 +53,8 @@ class KSubBytes extends Module {
 class KeyExpansion128 extends Module {
   val io = IO(new Bundle {
     val user_key = Flipped(Decoupled(Vec(16, UInt(8.W))))
-    // val keylength = Input(UInt(2.W))
-    // val taskID = Input(UInt(2.W))
-    // val round = Input(UInt(4.W))
     val write_round = ValidIO(UInt(4.W))
     val roundKey = Output(Vec(16, UInt(8.W)))
-    // val complete_taskID = ValidIO(UInt(2.W))
   })
 
   val Running = RegInit(false.B)

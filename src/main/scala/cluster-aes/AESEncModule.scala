@@ -5,12 +5,7 @@ import chisel3.util._
 import firrtl.FirrtlProtos.Firrtl.Statement.Register
 import chisel3.experimental.BundleLiterals._
 
-class AESEncModule extends Module {
-  val io = IO(new Bundle {
-    val input = Flipped(Decoupled(new Para))
-    val output = ValidIO(Vec(16, UInt(8.W)))
-    val complete_taskID = Output(UInt(2.W))
-  })
+class AESEncModule extends Engine {
 
   val IdleValue = Wire(new Para)
   IdleValue.state := Seq.fill(16)(0.U(8.W))
@@ -28,6 +23,7 @@ class AESEncModule extends Module {
   val MixColumnsModule = Module(new MixColumns(true))
 
   val Buffer = RegNext(ShiftRowsModule.io.para_out, IdleValue)
+  val InputDelay = RegNext(io.input.bits, IdleValue)
 
   def isFinalRound(keylength: UInt, rounds: UInt): Bool = (rounds - 10.U) / 2.U === keylength
 
@@ -46,37 +42,27 @@ class AESEncModule extends Module {
   MixColumnsModule.io.para_in := ShiftRowsModule.io.para_out
   
   when(io.input.fire) {
-    AddRoundKeyModule.io.para_in := io.input.bits
+    io.read_task := io.input.bits.control.taskID
+    io.read_round := io.input.bits.control.rounds
+  }.otherwise {
+    io.read_task := ShiftRowsModule.io.para_out.control.taskID
+    io.read_round := ShiftRowsModule.io.para_out.control.rounds 
+  }
+
+  when(ShiftRegister(io.input.fire, 1)) {
+    AddRoundKeyModule.io.para_in := InputDelay
   }.otherwise {
     AddRoundKeyModule.io.para_in := Mux(isFinalRound(Buffer.control.keylength, Buffer.control.rounds),
                                           Buffer, MixColumnsModule.io.para_out)
   }
- 
-  val expK128 = ROMeKeys.expandedKey128
-  val expK192 = ROMeKeys.expandedKey192
-  val expK256 = ROMeKeys.expandedKey256
-  AddRoundKeyModule.io.roundKey := 0.U(AddRoundKeyModule.io.roundKey.getWidth.W).asTypeOf(Vec(16, UInt(8.W)))
-  switch(AddRoundKeyModule.io.para_in.control.keylength){
-    is(0.U) {
-      AddRoundKeyModule.io.roundKey := expK128(AddRoundKeyModule.io.para_in.control.rounds)
-    }
-    is(1.U) {
-      AddRoundKeyModule.io.roundKey := expK192(AddRoundKeyModule.io.para_in.control.rounds)
-    }
-    is(2.U) {
-      AddRoundKeyModule.io.roundKey := expK256(AddRoundKeyModule.io.para_in.control.rounds)
-    }
-    is(3.U) {
-      AddRoundKeyModule.io.roundKey := expK256(AddRoundKeyModule.io.para_in.control.rounds)
-    }
-  }
 
-  io.output.bits := AddRoundKeyModule.io.para_out.state
-  io.output.valid := isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
+  AddRoundKeyModule.io.roundKey := io.round_key
+
+  io.output_state.bits := AddRoundKeyModule.io.para_out.state
+  io.output_state.valid := isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
                                   AddRoundKeyModule.io.para_out.control.rounds)
   io.complete_taskID := AddRoundKeyModule.io.para_out.control.taskID
-
-  io.input.ready := Buffer.control.isIdle
+  io.input.ready := MixColumnsModule.io.para_in.control.isIdle
 }
 
 // object Mymain extends App {

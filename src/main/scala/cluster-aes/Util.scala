@@ -1,7 +1,18 @@
 package clusterAES
 
 import chisel3._
-import chisel3.util.ShiftRegister
+import chisel3.util._
+
+abstract class Engine extends Module {
+  val io = IO(new Bundle {
+    val input = Flipped(Decoupled(new Para))
+    val round_key = Input(Vec(16, UInt(8.W)))
+    val output_state = ValidIO(Vec(16, UInt(8.W)))
+    val read_task = Output(UInt(2.W))
+    val read_round = Output(UInt(4.W))
+    val complete_taskID = Output(UInt(2.W))
+  })
+}
 
 class Para extends Bundle {
   val state = Vec(16, UInt(8.W))
