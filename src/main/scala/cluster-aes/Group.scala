@@ -32,6 +32,10 @@ class Group(encNum: Int) extends Module {
   def takeUnitID(workID: UInt): UInt = workID(3, 2)
   def takeTaskID(workID: UInt): UInt = workID(1, 0)
 
+  when(io.user_key.fire) {
+    WorkID_Key := io.workID_key
+  }
+
   KeyExpansionModule.io.user_key <> io.user_key
 
   io.completed := Units(3).io.completed ++ Units(2).io.completed ++

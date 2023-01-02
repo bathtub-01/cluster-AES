@@ -19,7 +19,7 @@ class SubBytes(isEnc: Boolean) extends Module {
   
   io.para_out.control := ShiftRegisterInit(io.para_in.control, pipeline_layer,
                                            (new ControlInfomation).Lit(_.isIdle -> true.B, _.keylength -> 0.U,
-                                                                        _.rounds -> 0.U, _.taskID -> 0.U))
+                                                                        _.rounds -> 5.U, _.taskID -> 0.U))
 }
 
 class amod extends Module  {

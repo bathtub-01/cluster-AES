@@ -24,17 +24,17 @@ class GroupTest extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.user_key.valid.poke(false.B)
       dut.clock.step(50)
 
-      // run dec
-      // for(i <- 0 until 16){
-      //   dut.io.input.bits.state(i).poke(state(i))
-      // }
-      // dut.io.input.bits.control.isIdle.poke(false.B)
-      // dut.io.input.bits.control.keylength.poke(0.U)
-      // dut.io.input.bits.control.rounds.poke(10.U)
-      // dut.io.input.bits.control.taskID.poke(0.U)
-      // dut.io.input.valid.poke(true.B)
-      // dut.clock.step()
-      // dut.io.input.valid.poke(false.B)
+      // run enc
+      for(i <- 0 until 16){
+        dut.io.text_in.bits(i).poke(state(i))
+      }
+      dut.io.workID_start.poke(1.U)
+      dut.io.text_in.valid.poke(true.B)
+      dut.clock.step()
+      dut.io.text_in.valid.poke(false.B)
+      dut.clock.step(50)
+
+      dut.io.workID_read.poke(1.U)
 
       // dut.clock.step()
 
