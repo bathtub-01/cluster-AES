@@ -15,7 +15,7 @@ class GroupTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new Group(3)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       // set key
       dut.clock.step(3)
-      dut.io.workID_key.poke(1.U)
+      dut.io.workID_key.poke(3.U)
       for(i <- 0 until 16){
         dut.io.user_key.bits(i).poke(user_key(i))
       }
@@ -28,13 +28,14 @@ class GroupTest extends AnyFlatSpec with ChiselScalatestTester {
       for(i <- 0 until 16){
         dut.io.text_in.bits(i).poke(state(i))
       }
-      dut.io.workID_start.poke(1.U)
+      dut.io.workID_start.poke(3.U)
       dut.io.text_in.valid.poke(true.B)
-      dut.clock.step()
+      dut.clock.step(5)
       dut.io.text_in.valid.poke(false.B)
-      dut.clock.step(50)
+      dut.clock.step(40)
 
-      dut.io.workID_read.poke(1.U)
+      dut.io.text_out.ready.poke(true.B)
+      dut.clock.step(4)
 
       // dut.clock.step()
 

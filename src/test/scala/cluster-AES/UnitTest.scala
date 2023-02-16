@@ -39,7 +39,7 @@ class EncUnitTest extends AnyFlatSpec with ChiselScalatestTester {
       }
       dut.clock.step(3)
 
-      // run dec
+      // run enc
       for(i <- 0 until 16){
         dut.io.input.bits.state(i).poke(state(i))
       }
@@ -80,10 +80,7 @@ class EncUnitTest extends AnyFlatSpec with ChiselScalatestTester {
 
       dut.clock.step(70)
       dut.io.output.ready.poke(true.B)
-      for(i <- 0 until 4) {
-        dut.io.output_select.poke(i.U)
-        dut.clock.step()
-      }
+      dut.clock.step(8)
     }
   }
 }
@@ -162,10 +159,7 @@ class DecUnitTest extends AnyFlatSpec with ChiselScalatestTester {
 
       dut.clock.step(70)
       dut.io.output.ready.poke(true.B)
-      for(i <- 0 until 4) {
-        dut.io.output_select.poke(i.U)
-        dut.clock.step()
-      }
+      dut.clock.step(8)
     }
   }
 }
