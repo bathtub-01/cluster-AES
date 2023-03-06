@@ -19,7 +19,8 @@ class Unit(isEnc: Boolean) extends Module {
   val InPara = Reg(Vec(4, new Para))
   val OutState = Reg(Vec(4, Vec(16, UInt(8.W))))
   // USE THIS TO CONTROL INPUT TRAFFIC!
-  val Active = RegInit(VecInit(Seq.fill(4)(false.B)))
+  val Active = RegInit(VecInit(Seq.fill(4)(false.B))) // tell InArbiter the input is ready
+  val Busy = RegInit(VecInit(Seq.fill(4)(false.B))) // tell outside world this slot is running
   val Completed = RegInit(VecInit(Seq.fill(4)(false.B)))
 
   val KeyBankModule = Module(new KeyBank)
@@ -28,12 +29,13 @@ class Unit(isEnc: Boolean) extends Module {
   val InArbiter = Module(new RRArbiter(new Para, 4))
   val OutArbiter = Module(new RRArbiter(Vec(16, UInt(8.W)), 4))
 
-  io.input.ready := !Active(io.input.bits.control.taskID)
+  io.input.ready := !Busy(io.input.bits.control.taskID)
 
   when(io.input.fire) {
     val select = io.input.bits.control.taskID
     InPara(select) := io.input.bits
     Active(select) := true.B
+    Busy(select) := true.B
   }
 
   for(task <- 0 until 4) {
@@ -41,9 +43,12 @@ class Unit(isEnc: Boolean) extends Module {
     InArbiter.io.in(task).valid := Active(task)
     OutArbiter.io.in(task).bits := OutState(task)
     OutArbiter.io.in(task).valid := Completed(task)
+    when(InArbiter.io.in(task).fire) {
+      Active(task) := false.B
+    }
     when(OutArbiter.io.in(task).fire) {
       Completed(task) := false.B
-      Active(task) := false.B
+      Busy(task) := false.B
     }
   }
 

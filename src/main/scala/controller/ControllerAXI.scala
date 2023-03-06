@@ -1,0 +1,223 @@
+package controller
+
+import clusterAES._
+import axinodes._
+
+import chisel3._
+import chisel3.util._
+
+trait ControllerAXILiteSlave extends AXI4LiteSlaveInterface {
+  lazy val regCount = 9
+  /*AXI register definitions.They must be define as lazy since regmap must be overrided as lazy*/
+  lazy val source_addr_setwork_reg = RegInit(0.U(bitsWide.value.W))
+  lazy val dest_addr_setwork_reg = RegInit(0.U(bitsWide.value.W))
+  lazy val setwork_control_reg = RegInit(0.U(bitsWide.value.W))
+  lazy val user_key_reg0 = RegInit(0.U(bitsWide.value.W))
+  lazy val user_key_reg1 = RegInit(0.U(bitsWide.value.W))
+  lazy val user_key_reg2 = RegInit(0.U(bitsWide.value.W))
+  lazy val user_key_reg3 = RegInit(0.U(bitsWide.value.W))
+  lazy val key_control_reg = RegInit(0.U(bitsWide.value.W))
+  lazy val status_reg = RegInit(0.U(bitsWide.value.W))
+  val source_addr_setwork_fired = RegInit(false.B)
+  val user_key_fired = RegInit(false.B)
+  val destroy_fired = RegInit(false.B)
+  lazy val regmap = AXI4LiteRegMap(0 -> AXI4LiteWriteReg(source_addr_setwork_reg), 
+                                   1 -> AXI4LiteWriteReg(dest_addr_setwork_reg),
+                                   2 -> AXI4LiteWriteReg(setwork_control_reg),
+                                   3 -> AXI4LiteWriteReg(user_key_reg0),
+                                   4 -> AXI4LiteWriteReg(user_key_reg1),
+                                   5 -> AXI4LiteWriteReg(user_key_reg2),
+                                   6 -> AXI4LiteWriteReg(user_key_reg3),
+                                   7 -> AXI4LiteWriteReg(key_control_reg),
+                                   8 -> AXI4LiteReadReg(status_reg))
+  def connect_status_reg(in: UInt) = {
+    status_reg := in
+  }
+  when(currentWriteAddress === 2.U && newDataReceived) {
+    source_addr_setwork_fired := false.B
+  }
+  when(currentWriteAddress === 7.U && newDataReceived) {
+    user_key_fired := false.B
+    destroy_fired := false.B
+  }
+}
+
+trait ControllerAXILiteMaster extends AXI4LiteMasterInterface {
+
+  // register address
+  val MM2S_DMACR_ADDR   = 0x0000_0000
+  val MM2S_SA_ADDR      = 0x0000_0018
+  val MM2S_LENGTH_ADDR  = 0x0000_0028
+  val S2MM_DMACR_ADDR   = 0x0000_0030
+  val S2MM_DA_ADDR      = 0x0000_0048
+  val S2MM_LENGTH_ADDR  = 0x0000_0058
+
+  def set_MM2S_DMACR(data: UInt) = {
+    startWriteTransaction(data, MM2S_DMACR_ADDR.U)
+  }
+  def set_MM2S_SA(data: UInt) = {
+    startWriteTransaction(data, MM2S_SA_ADDR.U)
+  }
+  def set_MM2S_LENGTH(data: UInt) = {
+    startWriteTransaction(data, MM2S_LENGTH_ADDR.U)
+  }
+  def set_S2MM_DMACR(data: UInt) = {
+    startWriteTransaction(data, S2MM_DMACR_ADDR.U)
+  }
+  def set_S2MM_DA(data: UInt) = {
+    startWriteTransaction(data, S2MM_DA_ADDR.U)
+  }
+  def set_S2MM_LENGTH(data: UInt) = {
+    startWriteTransaction(data, S2MM_LENGTH_ADDR.U)
+  }
+}
+
+trait ControllerAXIStreamSlave extends AXI4StreamSlaveInterface {
+  /**
+   * Write data to queue
+   * @param memio Queue enq interface
+   */
+  def write(memio:DecoupledIO[UInt]) = {
+    when(newDataReceived) {
+      when(memio.ready) {
+        memio.enq(axiStreamSignals.data)
+      }
+    }
+  }
+}
+
+trait ControllerAXIStreamMaster extends AXI4StreamMasterInterface{
+  val rdAddr=RegInit(0.U(bitsWide.value.W))
+  val startMemRead=RegInit(false.B)
+  def read(memio:DecoupledIO[UInt]) = {
+    when(isReadyToWrite && memio.valid) {
+      startWriteTransaction(memio.deq())
+    }
+  }
+}
+
+class ControllerAXI extends AXIModule {
+  val aclock= IO(Input(Clock()))
+  val areset= IO(Input(Bool()))
+  withClockAndReset(aclock, !areset.asBool) {
+    val Ctl = Module(new Controller(3))
+
+    val LiteSlave = new AXI4LiteSlaveNode with ControllerAXILiteSlave 
+    val LiteMaster = new AXI4LiteMasterNode with ControllerAXILiteMaster
+    val StreamSlave = new AXI4StreamSlaveNode with ControllerAXIStreamSlave
+    val StreamMaster = new AXI4StreamMasterNode with ControllerAXIStreamMaster
+
+    // LiteSlave conncection
+    Ctl.io.source_addr_setwork.bits := LiteSlave.source_addr_setwork_reg
+    Ctl.io.dest_addr_setwork := LiteSlave.dest_addr_setwork_reg
+    Ctl.io.source_addr_setwork.valid := LiteSlave.setwork_control_reg(30) & !LiteSlave.source_addr_setwork_fired
+    Ctl.io.length_setwork := LiteSlave.setwork_control_reg(25, 0)
+    Ctl.io.slotID_setwork := LiteSlave.setwork_control_reg(29, 26)
+    Ctl.io.user_key.bits := Cat(LiteSlave.user_key_reg3, 
+                                LiteSlave.user_key_reg2,
+                                LiteSlave.user_key_reg1, 
+                                LiteSlave.user_key_reg0).asTypeOf(Vec(16, UInt(8.W)))
+    Ctl.io.user_key.valid := LiteSlave.key_control_reg(8) & !LiteSlave.user_key_fired
+    Ctl.io.slotID_key := LiteSlave.key_control_reg(3, 0)
+    Ctl.io.destroy.bits := LiteSlave.key_control_reg(7, 4)
+    Ctl.io.destroy.valid := LiteSlave.key_control_reg(9) & !LiteSlave.destroy_fired
+    LiteSlave.connect_status_reg(Cat(Ctl.io.destroy.ready,
+                                     Ctl.io.user_key.ready,
+                                     Ctl.io.source_addr_setwork.ready))
+    when(Ctl.io.source_addr_setwork.fire) {
+      LiteSlave.source_addr_setwork_fired := true.B
+    }
+    when(Ctl.io.user_key.fire) {
+      LiteSlave.user_key_fired := true.B
+    }
+    when(Ctl.io.destroy.fire) {
+      LiteSlave.destroy_fired := true.B
+    }
+
+    // LiteMaster connection
+    val DestAddrReadyWire = WireInit(false.B)
+    val SourceAddrReadyWire = WireInit(false.B)
+    val reset_state :: write_s2mm_control :: write_mm2s_control :: idle_state :: write_s2mm_da :: write_s2mm_length :: write_mm2s_sa :: write_mm2s_length :: Nil = Enum(8)
+    val STM = RegInit(reset_state)
+    val S2MM_FIRST = RegInit(false.B)
+    Ctl.io.dest_addr_dma.ready := DestAddrReadyWire
+    Ctl.io.source_addr_dma.ready := SourceAddrReadyWire
+    switch(STM) {
+      is(reset_state) {
+        when(LiteMaster.isReadyToWrite) {
+          LiteMaster.set_S2MM_DMACR(1.U)
+          STM := write_s2mm_control
+        }
+      }
+      is(write_s2mm_control) {
+        when(LiteMaster.isReadyToWrite) {
+          LiteMaster.set_MM2S_DMACR(1.U)
+          STM := idle_state
+        }
+      }
+      is(idle_state) {
+        when(LiteMaster.isReadyToWrite) {
+          when(S2MM_FIRST) {
+            when(Ctl.io.dest_interrupt && Ctl.io.dest_addr_dma.valid) {
+              LiteMaster.set_S2MM_DA(Ctl.io.dest_addr_dma.bits)
+              DestAddrReadyWire := true.B
+              STM := write_s2mm_da
+            }.elsewhen(Ctl.io.source_interrupt && Ctl.io.source_addr_dma.valid) {
+              LiteMaster.set_MM2S_SA(Ctl.io.source_addr_dma.bits)
+              SourceAddrReadyWire := true.B
+              STM := write_mm2s_sa
+            }
+          }.otherwise { // MM2S first
+            when(Ctl.io.source_interrupt && Ctl.io.source_addr_dma.valid) {
+              LiteMaster.set_MM2S_SA(Ctl.io.source_addr_dma.bits)
+              SourceAddrReadyWire := true.B
+              STM := write_mm2s_sa
+            }.elsewhen(Ctl.io.dest_interrupt && Ctl.io.dest_addr_dma.valid) {
+              LiteMaster.set_S2MM_DA(Ctl.io.dest_addr_dma.bits)
+              DestAddrReadyWire := true.B
+              STM := write_s2mm_da
+            }
+          }
+        }
+      }
+      is(write_s2mm_da) {
+        when(LiteMaster.isReadyToWrite) {
+          LiteMaster.set_S2MM_LENGTH(16.U)
+          STM := write_s2mm_length
+        }
+      }
+      is(write_s2mm_length) {
+        when(LiteMaster.isReadyToWrite) {
+          S2MM_FIRST := false.B
+          STM := idle_state
+        }
+      }
+      is(write_mm2s_sa) {
+        when(LiteMaster.isReadyToWrite) {
+          LiteMaster.set_MM2S_LENGTH(16.U)
+          STM := write_mm2s_length
+        }
+      }
+      is(write_mm2s_length) {
+        when(LiteMaster.isReadyToWrite) {
+          S2MM_FIRST := true.B
+          STM := idle_state
+        }
+      }
+    }
+
+    // StreamSlave connection
+    val EnqWire = WireInit(0.U.asTypeOf(Decoupled(UInt(32.W)))) 
+    Ctl.io.fifo_in <> EnqWire
+    StreamSlave.write(EnqWire)
+
+    // StreamMaster connection
+    val DeqWire = WireInit(0.U.asTypeOf(Decoupled(UInt(32.W))))
+    DeqWire <> Ctl.io.fifo_out
+    StreamMaster.read(DeqWire)
+  }
+}
+
+object Mymain extends App {
+  emitVerilog(new ControllerAXI, Array("--target-dir", "generated"))
+}

@@ -14,6 +14,7 @@ class LoopQ extends Bundle {
 class Lock extends Bundle {
   val key_lock = Bool()
   val work_lock = Bool()
+  val last_group = Bool() // make use of it for implementing CBC mode
 }
 
 class Controller(encNum: Int) extends Module {
@@ -35,7 +36,10 @@ class Controller(encNum: Int) extends Module {
     val dest_addr_dma = Decoupled(UInt(32.W))
     // AXI-Stream master
     val fifo_out = Decoupled(UInt(32.W))
-    // val text_out = DecoupledIO(Vec(16, UInt(8.W))) //ad-hoc port
+    
+    // Interrupt
+    val source_interrupt = Output(Bool())
+    val dest_interrupt = Output(Bool())
   })
 
   def risingEdge(x: Bool) = x && !RegNext(x)
@@ -68,10 +72,20 @@ class Controller(encNum: Int) extends Module {
   val OutputEnqWire = WireInit(0.U.asTypeOf(Decoupled(UInt(32.W))))
   val OutputSlotIDEnqWire = WireInit(0.U.asTypeOf(Decoupled(UInt(4.W))))
   val OutputSlotIDDeqWire = WireInit(0.U.asTypeOf(Decoupled(UInt(4.W))))
-  val OutputFireCount = RegInit(0.U(2.W))
-
+  
   val DestAddr = RegInit(0.U(32.W))
   val DestAddrValid = RegInit(false.B)
+
+  val InputFireCount = RegInit(0.U(2.W))
+  val OutputFireCount = RegInit(0.U(2.W))
+  
+  val SourceIntReg = RegInit(true.B)
+  val SourceBeforeTrans = RegInit(false.B)
+  val DestIntReg = RegInit(true.B)
+  val DestBeforeTrans = RegInit(false.B)
+
+  io.source_interrupt := SourceIntReg
+  io.dest_interrupt := DestIntReg
   
   when(io.user_key.fire) {
     // LockBank(io.slotID_key).key_lock := true.B
@@ -96,6 +110,19 @@ class Controller(encNum: Int) extends Module {
   io.destroy.ready := !LockBank(io.destroy.bits).work_lock & LockBank(io.destroy.bits).key_lock
   io.user_key.ready := AESEngine.io.user_key.ready & !LockBank(io.slotID_key).key_lock & !risingEdge(AESEngine.io.user_key.ready)
 
+  when(io.fifo_in.fire) {
+    InputFireCount := InputFireCount + 1.U
+    SourceBeforeTrans := false.B
+  }
+  when(InputFireCount === 0.U && !SourceBeforeTrans) {
+    SourceIntReg := true.B
+  }
+  when(io.source_addr_dma.fire) {
+    SourceIntReg := false.B
+    SourceAddrValid := false.B
+    SourceBeforeTrans := true.B
+  }
+
   when(io.source_addr_setwork.fire) { // new work comes
     LockBank(io.slotID_setwork).work_lock := true.B
     AddrLoopQueue(LQHead).addr := io.source_addr_setwork.bits
@@ -103,12 +130,9 @@ class Controller(encNum: Int) extends Module {
     LengthCount(io.slotID_setwork) := io.length_setwork
     DestAddrBank(io.slotID_setwork) := io.dest_addr_setwork
     LQHead := LQHead + 1.U
-    when(io.source_addr_dma.fire) { 
-      SourceAddrValid := false.B
-    }
   }.otherwise {
     when(AddrLoopQueue(LQTail).addr =/= 0.U) { // loop queue is not empty
-      when(io.source_addr_dma.fire || SourceAddr === 0.U) { // Output is needed
+      when(SourceIntReg && !SourceAddrValid) { // Output is needed
         SourceAddr := AddrLoopQueue(LQTail).addr
         SourceAddrValid := true.B
         InputSlotIDEnqWire.enq(AddrLoopQueue(LQTail).slotID)
@@ -119,17 +143,12 @@ class Controller(encNum: Int) extends Module {
         LQHead := LQHead + 1.U
         }.otherwise { // it is the final group of a work
           LengthCount(AddrLoopQueue(LQTail).slotID) := 0.U
-          // LockBank(AddrLoopQueue(LQTail).slotID) := false.B
+          LockBank(AddrLoopQueue(LQTail).slotID).last_group := true.B
         }
         when(LQHead =/= LQTail) { // loop queue is not full
           AddrLoopQueue(LQTail).addr := 0.U
         }
         LQTail := LQTail + 1.U
-      }
-    }.otherwise {
-      when(io.source_addr_dma.fire) { // all done
-        SourceAddrValid := false.B
-        SourceAddr := 0.U
       }
     }
   }
@@ -179,6 +198,10 @@ class Controller(encNum: Int) extends Module {
       when(OutputCount === 3.U) {
         OutputCount := 0.U
         CanDrag := true.B
+        when(LockBank(AESEngine.io.workID_read).last_group === true.B) { // last group of a work has been finished
+          LockBank(AESEngine.io.workID_read).work_lock := false.B
+          LockBank(AESEngine.io.workID_read).last_group := false.B
+        }
       }.otherwise {
         OutputCount := OutputCount + 1.U
       }
@@ -190,116 +213,35 @@ class Controller(encNum: Int) extends Module {
 
   when(io.fifo_out.fire) {
     OutputFireCount := OutputFireCount + 1.U
+    DestBeforeTrans := false.B
   }
-  when(OutputFireCount === 0.U && OutputSlotIDDeqWire.valid) {
-    DestAddr := DestAddrBank(OutputSlotIDDeqWire.deq())
-    DestAddrValid := true.B
+  when(OutputFireCount === 0.U && !DestBeforeTrans) {
+    DestIntReg := true.B
+  }
+  when(DestIntReg && OutputSlotIDDeqWire.valid) {
+    when(!DestAddrValid) {
+      val id = OutputSlotIDDeqWire.deq()
+      val addr = DestAddrBank(id)
+      DestAddr := addr
+      DestAddrBank(id) := addr + 16.U
+      DestAddrValid := true.B
+    }
   }
   when(io.dest_addr_dma.fire) {
     DestAddrValid := false.B
+    DestIntReg := false.B
+    DestBeforeTrans := true.B
   }
 
   InputFIFO.io.enq <> io.fifo_in
   io.fifo_out <> OutputFIFO.io.deq
-  // io.fifo_out <> OutputFIFO.io.deq
   io.source_addr_setwork.ready := io.length_setwork > 0.U & LockBank(io.slotID_setwork).key_lock & 
                            !LockBank(io.slotID_setwork).work_lock
   io.source_addr_dma.bits := SourceAddr
   io.source_addr_dma.valid := SourceAddrValid
-
   AESEngine.io.text_in.bits := TextInReg.asTypeOf(Vec(16, UInt(8.W)))
-
-  // ad-hoc code
-  // AESEngine.io.text_out.ready := false.B
-  // io.text_out <> AESEngine.io.text_out
 }
 
-trait CtrollerAXILiteSlave extends AXI4LiteSlaveInterface {
-  lazy val regCount = 8
-  /*AXI register definitions.They must be define as lazy since regmap must be overrided as lazy*/
-  lazy val source_addr_setwork_reg = RegInit(0.U(bitsWide.value.W))
-  lazy val setwork_control_reg = RegInit(0.U(bitsWide.value.W))
-  lazy val user_key_reg0 = RegInit(0.U(bitsWide.value.W))
-  lazy val user_key_reg1 = RegInit(0.U(bitsWide.value.W))
-  lazy val user_key_reg2 = RegInit(0.U(bitsWide.value.W))
-  lazy val user_key_reg3 = RegInit(0.U(bitsWide.value.W))
-  lazy val key_control_reg = RegInit(0.U(bitsWide.value.W))
-  lazy val status_reg = RegInit(0.U(bitsWide.value.W))
-  lazy val regmap = AXI4LiteRegMap(0 -> AXI4LiteWriteReg(source_addr_setwork_reg), 
-                                   1 -> AXI4LiteWriteReg(setwork_control_reg),
-                                   2 -> AXI4LiteWriteReg(user_key_reg0),
-                                   3 -> AXI4LiteWriteReg(user_key_reg1),
-                                   4 -> AXI4LiteWriteReg(user_key_reg2),
-                                   5 -> AXI4LiteWriteReg(user_key_reg3),
-                                   6 -> AXI4LiteWriteReg(key_control_reg),
-                                   7 -> AXI4LiteReadReg(status_reg))
-  def connect_status_reg(in: UInt) = {
-    status_reg := in
-  }
-}
-
-trait ControllerAXIStreamSlave extends AXI4StreamSlaveInterface {
-  /**
-   * Write data to queue
-   * @param memio Queue enq interface
-   */
-  def write(memio:DecoupledIO[UInt]) = {
-    when(newDataReceived) {
-      when(memio.ready) {
-        memio.enq(axiStreamSignals.data)
-      }
-    }
-  }
-}
-
-class ControllerAXI extends AXIModule {
-  // val m=AXIClockAndResetDomain(new AXI4LiteMasterNode with MasterInterfaceImp) // Create master node
-  // don't use AXIClockAndResetDomain to seperate these clocks! create a single clock by your own! 
-  val aclock= IO(Input(Clock()))
-  val areset= IO(Input(Bool()))
-  withClockAndReset(aclock, !areset.asBool) {
-    val LiteSlave = new AXI4LiteSlaveNode with CtrollerAXILiteSlave 
-    val StreamSlave = new AXI4StreamSlaveNode with ControllerAXIStreamSlave
-    val Ctl = Module(new Controller(3))
-
-    // LiteSlave conncection
-    Ctl.io.source_addr_setwork.bits := LiteSlave.source_addr_setwork_reg
-    Ctl.io.source_addr_setwork.valid := LiteSlave.setwork_control_reg(30)
-    Ctl.io.length_setwork := LiteSlave.setwork_control_reg(25, 0)
-    Ctl.io.slotID_setwork := LiteSlave.setwork_control_reg(29, 26)
-    Ctl.io.user_key.bits := Cat(LiteSlave.user_key_reg3, 
-                                LiteSlave.user_key_reg2,
-                                LiteSlave.user_key_reg1, 
-                                LiteSlave.user_key_reg0).asTypeOf(Vec(16, UInt(8.W)))
-    Ctl.io.user_key.valid := LiteSlave.key_control_reg(8)
-    Ctl.io.slotID_key := LiteSlave.key_control_reg(3, 0)
-    Ctl.io.destroy.bits := LiteSlave.key_control_reg(7, 4)
-    Ctl.io.destroy.valid := LiteSlave.key_control_reg(9)
-    LiteSlave.connect_status_reg(Cat(Ctl.io.destroy.ready,
-                                     Ctl.io.user_key.ready,
-                                     Ctl.io.source_addr_setwork.ready))
-    Ctl.io.source_addr_dma.ready := true.B // ad-hoc
-
-    // StreamSlave connection
-    val EnqWire = WireInit(0.U.asTypeOf(Decoupled(UInt(32.W)))) 
-    Ctl.io.fifo_in <> EnqWire
-    StreamSlave.write(EnqWire)
-  }
-}
-
-class modA extends Module {
-  val io = IO(new Bundle {
-    val input = Flipped(Decoupled(Vec(2, Bool())))
-    val output = Output(Vec(2, Bool()))
-  })
-  val wire = WireInit(0.U.asTypeOf(Vec(2, Bool())))
-  when(io.input.fire){
-    wire := io.input.bits
-  }
-  io.output := ShiftRegisterInit(wire, 1, 0.U.asTypeOf(Vec(2, Bool())))
-  io.input.ready := ShiftRegisterInit(io.input.valid, 3, false.B)
-}
-
-object Mymain extends App {
-  emitVerilog(new Controller(3), Array("--target-dir", "generated"))
-}
+// object Mymain extends App {
+//   emitVerilog(new Controller(3), Array("--target-dir", "generated"))
+// }

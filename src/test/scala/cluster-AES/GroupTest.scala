@@ -35,7 +35,7 @@ class GroupTest extends AnyFlatSpec with ChiselScalatestTester {
       dut.clock.step(40)
 
       dut.io.text_out.ready.poke(true.B)
-      dut.clock.step(4)
+      dut.clock.step(80)
 
       // dut.clock.step()
 
