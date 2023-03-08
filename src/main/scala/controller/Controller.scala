@@ -38,8 +38,8 @@ class Controller(encNum: Int) extends Module {
     val fifo_out = Decoupled(UInt(32.W))
     
     // Interrupt
-    val source_interrupt = Output(Bool())
-    val dest_interrupt = Output(Bool())
+    // val source_interrupt = Output(Bool())
+    // val dest_interrupt = Input(Bool())
   })
 
   def risingEdge(x: Bool) = x && !RegNext(x)
@@ -76,16 +76,17 @@ class Controller(encNum: Int) extends Module {
   val DestAddr = RegInit(0.U(32.W))
   val DestAddrValid = RegInit(false.B)
 
-  val InputFireCount = RegInit(0.U(2.W))
-  val OutputFireCount = RegInit(0.U(2.W))
+  // val InputFireCount = RegInit(0.U(2.W))
+  val OutputFireCount = RegInit(0.U(3.W))
   
-  val SourceIntReg = RegInit(true.B)
-  val SourceBeforeTrans = RegInit(false.B)
-  val DestIntReg = RegInit(true.B)
-  val DestBeforeTrans = RegInit(false.B)
+  // val SourceIntReg = RegInit(true.B)
+  // val SourceBeforeTrans = RegInit(false.B)
+  val OutputFIFOGuard = RegInit(false.B)
+  // val DestIntReg = RegInit(true.B)
+  // val DestBeforeTrans = RegInit(false.B)
 
-  io.source_interrupt := SourceIntReg
-  io.dest_interrupt := DestIntReg
+  // io.source_interrupt := SourceIntReg
+  // io.dest_interrupt := DestIntReg
   
   when(io.user_key.fire) {
     // LockBank(io.slotID_key).key_lock := true.B
@@ -110,17 +111,17 @@ class Controller(encNum: Int) extends Module {
   io.destroy.ready := !LockBank(io.destroy.bits).work_lock & LockBank(io.destroy.bits).key_lock
   io.user_key.ready := AESEngine.io.user_key.ready & !LockBank(io.slotID_key).key_lock & !risingEdge(AESEngine.io.user_key.ready)
 
-  when(io.fifo_in.fire) {
-    InputFireCount := InputFireCount + 1.U
-    SourceBeforeTrans := false.B
-  }
-  when(InputFireCount === 0.U && !SourceBeforeTrans) {
-    SourceIntReg := true.B
-  }
+  // when(io.fifo_in.fire) {
+  //   InputFireCount := InputFireCount + 1.U
+  //   SourceBeforeTrans := false.B
+  // }
+  // when(InputFireCount === 0.U && !SourceBeforeTrans) {
+  //   SourceIntReg := true.B
+  // }
   when(io.source_addr_dma.fire) {
-    SourceIntReg := false.B
+    // SourceIntReg := false.B
     SourceAddrValid := false.B
-    SourceBeforeTrans := true.B
+    // SourceBeforeTrans := true.B
   }
 
   when(io.source_addr_setwork.fire) { // new work comes
@@ -132,7 +133,7 @@ class Controller(encNum: Int) extends Module {
     LQHead := LQHead + 1.U
   }.otherwise {
     when(AddrLoopQueue(LQTail).addr =/= 0.U) { // loop queue is not empty
-      when(SourceIntReg && !SourceAddrValid) { // Output is needed
+      when(!SourceAddrValid) { // Output is needed
         SourceAddr := AddrLoopQueue(LQTail).addr
         SourceAddrValid := true.B
         InputSlotIDEnqWire.enq(AddrLoopQueue(LQTail).slotID)
@@ -213,28 +214,31 @@ class Controller(encNum: Int) extends Module {
 
   when(io.fifo_out.fire) {
     OutputFireCount := OutputFireCount + 1.U
-    DestBeforeTrans := false.B
+    
   }
-  when(OutputFireCount === 0.U && !DestBeforeTrans) {
-    DestIntReg := true.B
+  when(OutputFireCount === 4.U) {
+    OutputFireCount := 0.U
+    OutputFIFOGuard := false.B
   }
-  when(DestIntReg && OutputSlotIDDeqWire.valid) {
-    when(!DestAddrValid) {
-      val id = OutputSlotIDDeqWire.deq()
-      val addr = DestAddrBank(id)
-      DestAddr := addr
-      DestAddrBank(id) := addr + 16.U
-      DestAddrValid := true.B
-    }
+  // when(DestIntReg && OutputSlotIDDeqWire.valid) {
+  when(OutputSlotIDDeqWire.valid && !DestAddrValid) {
+    val id = OutputSlotIDDeqWire.deq()
+    val addr = DestAddrBank(id)
+    DestAddr := addr
+    DestAddrBank(id) := addr + 16.U
+    DestAddrValid := true.B
   }
   when(io.dest_addr_dma.fire) {
     DestAddrValid := false.B
-    DestIntReg := false.B
-    DestBeforeTrans := true.B
+    OutputFIFOGuard := true.B
+    // DestIntReg := false.B
+    // DestBeforeTrans := true.B
   }
 
   InputFIFO.io.enq <> io.fifo_in
-  io.fifo_out <> OutputFIFO.io.deq
+  io.fifo_out.bits := OutputFIFO.io.deq.bits
+  io.fifo_out.valid := OutputFIFO.io.deq.valid & OutputFIFOGuard
+  OutputFIFO.io.deq.ready := io.fifo_out.ready & OutputFIFOGuard
   io.source_addr_setwork.ready := io.length_setwork > 0.U & LockBank(io.slotID_setwork).key_lock & 
                            !LockBank(io.slotID_setwork).work_lock
   io.source_addr_dma.bits := SourceAddr

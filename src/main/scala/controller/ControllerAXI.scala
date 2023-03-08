@@ -46,14 +46,19 @@ trait ControllerAXILiteMaster extends AXI4LiteMasterInterface {
 
   // register address
   val MM2S_DMACR_ADDR   = 0x0000_0000
+  val MM2S_DMASR_ADDR   = 0x0000_0004
   val MM2S_SA_ADDR      = 0x0000_0018
   val MM2S_LENGTH_ADDR  = 0x0000_0028
   val S2MM_DMACR_ADDR   = 0x0000_0030
+  val S2MM_DMASR_ADDR   = 0x0000_0034
   val S2MM_DA_ADDR      = 0x0000_0048
   val S2MM_LENGTH_ADDR  = 0x0000_0058
 
   def set_MM2S_DMACR(data: UInt) = {
     startWriteTransaction(data, MM2S_DMACR_ADDR.U)
+  }
+  def set_MM2S_DMASR(data: UInt) = {
+    startWriteTransaction(data, MM2S_DMASR_ADDR.U)
   }
   def set_MM2S_SA(data: UInt) = {
     startWriteTransaction(data, MM2S_SA_ADDR.U)
@@ -63,6 +68,9 @@ trait ControllerAXILiteMaster extends AXI4LiteMasterInterface {
   }
   def set_S2MM_DMACR(data: UInt) = {
     startWriteTransaction(data, S2MM_DMACR_ADDR.U)
+  }
+  def set_S2MM_DMASR(data: UInt) = {
+    startWriteTransaction(data, S2MM_DMASR_ADDR.U)
   }
   def set_S2MM_DA(data: UInt) = {
     startWriteTransaction(data, S2MM_DA_ADDR.U)
@@ -87,10 +95,17 @@ trait ControllerAXIStreamSlave extends AXI4StreamSlaveInterface {
 }
 
 trait ControllerAXIStreamMaster extends AXI4StreamMasterInterface{
-  val rdAddr=RegInit(0.U(bitsWide.value.W))
-  val startMemRead=RegInit(false.B)
+  // val rdAddr=RegInit(0.U(bitsWide.value.W))
+  // val startMemRead=RegInit(false.B)
+  val streamCounter = RegInit(0.U(2.W))
   def read(memio:DecoupledIO[UInt]) = {
     when(isReadyToWrite && memio.valid) {
+      streamCounter := streamCounter + 1.U
+      when(streamCounter === 3.U) {
+        setLast(true.B)
+      }.otherwise {
+        setLast(false.B)
+      }
       startWriteTransaction(memio.deq())
     }
   }
@@ -99,6 +114,8 @@ trait ControllerAXIStreamMaster extends AXI4StreamMasterInterface{
 class ControllerAXI extends AXIModule {
   val aclock= IO(Input(Clock()))
   val areset= IO(Input(Bool()))
+  val s2mm_interrupt = IO(Input(Bool()))
+  val mm2s_interrupt = IO(Input(Bool()))
   withClockAndReset(aclock, !areset.asBool) {
     val Ctl = Module(new Controller(3))
 
@@ -137,47 +154,65 @@ class ControllerAXI extends AXIModule {
     // LiteMaster connection
     val DestAddrReadyWire = WireInit(false.B)
     val SourceAddrReadyWire = WireInit(false.B)
-    val reset_state :: write_s2mm_control :: write_mm2s_control :: idle_state :: write_s2mm_da :: write_s2mm_length :: write_mm2s_sa :: write_mm2s_length :: Nil = Enum(8)
+    val reset_state :: write_s2mm_control :: write_mm2s_control :: idle_state :: clear_s2mm_intr :: clear_mm2s_intr :: write_s2mm_da :: write_s2mm_length :: write_mm2s_sa :: write_mm2s_length :: Nil = Enum(10)
     val STM = RegInit(reset_state)
     val S2MM_FIRST = RegInit(false.B)
+    val S2MM_FIRST_RUN = RegInit(true.B)
+    val MM2S_FIRST_RUN = RegInit(true.B)
+    val control_reg_bits = (1 << 12) | 1
+    val clear_intr_bits = (1 << 12)
     Ctl.io.dest_addr_dma.ready := DestAddrReadyWire
     Ctl.io.source_addr_dma.ready := SourceAddrReadyWire
     switch(STM) {
       is(reset_state) {
         when(LiteMaster.isReadyToWrite) {
-          LiteMaster.set_S2MM_DMACR(1.U)
+          LiteMaster.set_S2MM_DMACR(control_reg_bits.U)
           STM := write_s2mm_control
         }
       }
       is(write_s2mm_control) {
         when(LiteMaster.isReadyToWrite) {
-          LiteMaster.set_MM2S_DMACR(1.U)
+          LiteMaster.set_MM2S_DMACR(control_reg_bits.U)
           STM := idle_state
         }
       }
       is(idle_state) {
         when(LiteMaster.isReadyToWrite) {
           when(S2MM_FIRST) {
-            when(Ctl.io.dest_interrupt && Ctl.io.dest_addr_dma.valid) {
-              LiteMaster.set_S2MM_DA(Ctl.io.dest_addr_dma.bits)
-              DestAddrReadyWire := true.B
-              STM := write_s2mm_da
-            }.elsewhen(Ctl.io.source_interrupt && Ctl.io.source_addr_dma.valid) {
-              LiteMaster.set_MM2S_SA(Ctl.io.source_addr_dma.bits)
-              SourceAddrReadyWire := true.B
-              STM := write_mm2s_sa
+            when((S2MM_FIRST_RUN || s2mm_interrupt) && Ctl.io.dest_addr_dma.valid) {
+              LiteMaster.set_S2MM_DMASR(clear_intr_bits.U)
+              S2MM_FIRST_RUN := false.B
+              STM := clear_s2mm_intr
+            }.elsewhen((MM2S_FIRST_RUN || mm2s_interrupt) && Ctl.io.source_addr_dma.valid) {
+              LiteMaster.set_MM2S_DMASR(clear_intr_bits.U)
+              MM2S_FIRST_RUN := false.B
+              STM := clear_mm2s_intr
             }
           }.otherwise { // MM2S first
-            when(Ctl.io.source_interrupt && Ctl.io.source_addr_dma.valid) {
-              LiteMaster.set_MM2S_SA(Ctl.io.source_addr_dma.bits)
-              SourceAddrReadyWire := true.B
-              STM := write_mm2s_sa
-            }.elsewhen(Ctl.io.dest_interrupt && Ctl.io.dest_addr_dma.valid) {
-              LiteMaster.set_S2MM_DA(Ctl.io.dest_addr_dma.bits)
-              DestAddrReadyWire := true.B
-              STM := write_s2mm_da
+            when((MM2S_FIRST_RUN || mm2s_interrupt) && Ctl.io.source_addr_dma.valid) {
+              LiteMaster.set_MM2S_DMASR(clear_intr_bits.U)
+              MM2S_FIRST_RUN := false.B
+              STM := clear_mm2s_intr
+            }.elsewhen((S2MM_FIRST_RUN || s2mm_interrupt) && Ctl.io.dest_addr_dma.valid) {
+              LiteMaster.set_S2MM_DMASR(clear_intr_bits.U)
+              S2MM_FIRST_RUN := false.B
+              STM := clear_s2mm_intr
             }
           }
+        }
+      }
+      is(clear_s2mm_intr) {
+        when(LiteMaster.isReadyToWrite) {
+          LiteMaster.set_S2MM_DA(Ctl.io.dest_addr_dma.bits)
+          DestAddrReadyWire := true.B
+          STM := write_s2mm_da
+        }
+      }
+      is(clear_mm2s_intr) {
+        when(LiteMaster.isReadyToWrite) {
+          LiteMaster.set_MM2S_SA(Ctl.io.source_addr_dma.bits)
+          SourceAddrReadyWire := true.B
+          STM := write_mm2s_sa
         }
       }
       is(write_s2mm_da) {
