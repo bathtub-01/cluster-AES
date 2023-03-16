@@ -18,6 +18,10 @@ trait ControllerAXILiteSlave extends AXI4LiteSlaveInterface {
   lazy val user_key_reg3 = RegInit(0.U(bitsWide.value.W))
   lazy val key_control_reg = RegInit(0.U(bitsWide.value.W))
   lazy val status_reg = RegInit(0.U(bitsWide.value.W))
+  lazy val initial_vector_reg0 = RegInit(0.U(bitsWide.value.W))
+  lazy val initial_vector_reg1 = RegInit(0.U(bitsWide.value.W))
+  lazy val initial_vector_reg2 = RegInit(0.U(bitsWide.value.W))
+  lazy val initial_vector_reg3 = RegInit(0.U(bitsWide.value.W))
   val source_addr_setwork_fired = RegInit(false.B)
   val user_key_fired = RegInit(false.B)
   val destroy_fired = RegInit(false.B)
@@ -29,7 +33,11 @@ trait ControllerAXILiteSlave extends AXI4LiteSlaveInterface {
                                    5 -> AXI4LiteWriteReg(user_key_reg2),
                                    6 -> AXI4LiteWriteReg(user_key_reg3),
                                    7 -> AXI4LiteWriteReg(key_control_reg),
-                                   8 -> AXI4LiteReadReg(status_reg))
+                                   8 -> AXI4LiteReadReg(status_reg),
+                                   9 ->  AXI4LiteWriteReg(initial_vector_reg0),
+                                   10 -> AXI4LiteWriteReg(initial_vector_reg1),
+                                   11 -> AXI4LiteWriteReg(initial_vector_reg2),
+                                   12 -> AXI4LiteWriteReg(initial_vector_reg3))
   def connect_status_reg(in: UInt) = {
     status_reg := in
   }
@@ -134,6 +142,10 @@ class ControllerAXI extends AXIModule {
                                 LiteSlave.user_key_reg2,
                                 LiteSlave.user_key_reg1, 
                                 LiteSlave.user_key_reg0).asTypeOf(Vec(16, UInt(8.W)))
+    Ctl.io.initial_vector := Cat(LiteSlave.initial_vector_reg3,
+                                 LiteSlave.initial_vector_reg2,
+                                 LiteSlave.initial_vector_reg1,
+                                 LiteSlave.initial_vector_reg0).asTypeOf(Vec(4, UInt(32.W)))
     Ctl.io.user_key.valid := LiteSlave.key_control_reg(8) & !LiteSlave.user_key_fired
     Ctl.io.slotID_key := LiteSlave.key_control_reg(3, 0)
     Ctl.io.destroy.bits := LiteSlave.key_control_reg(7, 4)

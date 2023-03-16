@@ -14,7 +14,9 @@ class LoopQ extends Bundle {
 class Lock extends Bundle {
   val key_lock = Bool()
   val work_lock = Bool()
-  val last_group = Bool() // make use of it for implementing CBC mode
+  val is_cbc = Bool() // work is in CBC mode
+  val cbc_vec_updated = Bool()
+  val last_group = Bool()
 }
 
 class Controller(encNum: Int) extends Module {
@@ -31,6 +33,11 @@ class Controller(encNum: Int) extends Module {
     val user_key = Flipped(Decoupled(Vec(16, UInt(8.W))))
     val slotID_key = Input(UInt(4.W))
     val destroy = Flipped(Decoupled(UInt(4.W)))
+
+    val work_mode = Input(Bool()) // 0 for ECB mode, 1 for CBC mode
+    val initial_vector = Input(Vec(4, UInt(32.W))) 
+    val final_vector = Output(Vec(4, UInt(32.W))) // outside world may take final_vector to store intermidiate status
+    val final_vector_select = Input(UInt(4.W))
     // AXI-Lite master
     val source_addr_dma = Decoupled(UInt(32.W)) // to DMA
     val dest_addr_dma = Decoupled(UInt(32.W))
@@ -41,9 +48,13 @@ class Controller(encNum: Int) extends Module {
   })
 
   def risingEdge(x: Bool) = x && !RegNext(x)
+  def isEncUnit(id: UInt):Bool = id < (encNum.U * 4.U)
 
-  val AESEngine = Module(new Group(3))
+  val AESEngine = Module(new Group(encNum))
   val LockBank = RegInit(VecInit(Seq.fill(16)(0.U.asTypeOf(new Lock))))
+
+  val CBCVector = RegInit(VecInit(Seq.fill(16)(0.U.asTypeOf(Vec(4, UInt(32.W)))))) // if a work is in ECB mode, then its CBCVector is 0
+  val LastGroupText = RegInit(VecInit(Seq.fill((4 - encNum) * 4)(0.U.asTypeOf(Vec(4, UInt(32.W)))))) // for Dec units
 
   val AddrLoopQueue = RegInit(VecInit(Seq.fill(16)(0.U.asTypeOf(new LoopQ))))
   val LQHead = RegInit(0.U(4.W))
@@ -77,6 +88,7 @@ class Controller(encNum: Int) extends Module {
   val OutputFIFOGuard = RegInit(false.B)
 
   io.busy := Cat(LockBank.map(_.work_lock).reverse)
+  io.final_vector := CBCVector(io.final_vector_select)
   
   when(io.user_key.fire) {
     RecentKeySetSlotID := io.slotID_key
@@ -111,6 +123,15 @@ class Controller(encNum: Int) extends Module {
     LengthCount(io.slotID_setwork) := io.length_setwork
     DestAddrBank(io.slotID_setwork) := io.dest_addr_setwork
     LQHead := LQHead + 1.U
+    when(io.work_mode) { // work is in CBC mode
+      when(io.initial_vector.asTypeOf(UInt(128.W)) =/= 0.U) { // update CBCVec
+        CBCVector(io.slotID_setwork) := io.initial_vector
+      }
+    }.otherwise { // work is in ECB mode
+      CBCVector(io.slotID_setwork) := 0.U.asTypeOf(Vec(4, UInt(32.W)))
+    }
+    LockBank(io.slotID_setwork).is_cbc := io.work_mode
+    LockBank(io.slotID_setwork).cbc_vec_updated := true.B
   }.otherwise {
     when(AddrLoopQueue(LQTail).addr =/= 0.U) { // loop queue is not empty
       when(!SourceAddrValid) { // Output is needed
@@ -137,9 +158,12 @@ class Controller(encNum: Int) extends Module {
   InputSlotIDFIFO.io.enq <> InputSlotIDEnqWire
   InputSlotIDDeqWire <> InputSlotIDFIFO.io.deq
   AESEngine.io.workID_start := InputSlotID
-  AESEngine.io.text_in.valid := CanFeed
+  AESEngine.io.text_in.valid := CanFeed & LockBank(InputSlotID).cbc_vec_updated
   when(AESEngine.io.text_in.fire) {
     CanFeed := false.B
+    when(LockBank(InputSlotID).is_cbc) {
+      LockBank(InputSlotID).cbc_vec_updated := false.B
+    }
   }
   when(!CanFeed) { // collect text for AESEngine
     InputFIFO.io.deq.ready := true.B
@@ -158,6 +182,16 @@ class Controller(encNum: Int) extends Module {
   when(InputCount === 3.U) {
     InputSlotID := InputSlotIDDeqWire.deq()
   }
+  when(isEncUnit(InputSlotID)) { // Enc unit: input text needs to XOR CBCVector
+    val tmp_textin = TextInReg.asTypeOf(Vec(16, UInt(8.W)))
+    val tmp_cbc = CBCVector(InputSlotID).asTypeOf(Vec(16, UInt(8.W)))
+    AESEngine.io.text_in.bits := tmp_textin.zip(tmp_cbc).map{case (a, b) => a ^ b}
+  }.otherwise { // Dec unit
+    AESEngine.io.text_in.bits := TextInReg.asTypeOf(Vec(16, UInt(8.W)))
+    when(LockBank(InputSlotID).is_cbc && AESEngine.io.text_in.fire) { // store the cypher text as next round's cbc vector
+      LastGroupText(InputSlotID - encNum.U * 4.U) := TextInReg
+    }
+  }
 
   OutputFIFO.io.enq <> OutputEnqWire
   OutputSlotIDFIFO.io.enq <> OutputSlotIDEnqWire
@@ -168,10 +202,24 @@ class Controller(encNum: Int) extends Module {
   }
   when(!CanDrag) { // collect output text
     when(AESEngine.io.text_out.valid && OutputEnqWire.ready) { // output is valid
-      OutputEnqWire.bits := Cat(AESEngine.io.text_out.bits(OutputCount * 4.U + 3.U),
-                                AESEngine.io.text_out.bits(OutputCount * 4.U + 2.U),
-                                AESEngine.io.text_out.bits(OutputCount * 4.U + 1.U),
-                                AESEngine.io.text_out.bits(OutputCount * 4.U))
+      val output_text = Cat(AESEngine.io.text_out.bits(OutputCount * 4.U + 3.U),
+                            AESEngine.io.text_out.bits(OutputCount * 4.U + 2.U),
+                            AESEngine.io.text_out.bits(OutputCount * 4.U + 1.U),
+                            AESEngine.io.text_out.bits(OutputCount * 4.U))
+      when(!isEncUnit(AESEngine.io.workID_read)) { // Dec unit: output text needs to XOR CBCVector
+        OutputEnqWire.bits := output_text ^ CBCVector(AESEngine.io.workID_read)(OutputCount)
+        when(OutputCount === 3.U && LockBank(AESEngine.io.workID_read).is_cbc) { // update CBCVector
+          CBCVector(AESEngine.io.workID_read) := LastGroupText(AESEngine.io.workID_read - encNum.U * 4.U)
+          LockBank(AESEngine.io.workID_read).cbc_vec_updated := true.B
+        }
+      }. otherwise { // Enc unit
+        when(OutputCount === 0.U && LockBank(AESEngine.io.workID_read).is_cbc) { // update CBCVector
+          val tmp_textout = AESEngine.io.text_out.bits.asTypeOf(Vec(4, UInt(32.W)))
+          CBCVector(AESEngine.io.workID_read) := tmp_textout
+          LockBank(AESEngine.io.workID_read).cbc_vec_updated := true.B
+        }
+        OutputEnqWire.bits := output_text
+      }
       OutputEnqWire.valid := true.B
       when(OutputCount === 0.U) {
         OutputSlotIDEnqWire.enq(AESEngine.io.workID_read)
@@ -179,9 +227,11 @@ class Controller(encNum: Int) extends Module {
       when(OutputCount === 3.U) {
         OutputCount := 0.U
         CanDrag := true.B
-        when(LockBank(AESEngine.io.workID_read).last_group === true.B) { // last group of a work has been finished
+        when(LockBank(AESEngine.io.workID_read).last_group === true.B) { // last group of a work has been finished, reset related lock
           LockBank(AESEngine.io.workID_read).work_lock := false.B
           LockBank(AESEngine.io.workID_read).last_group := false.B
+          // LockBank(AESEngine.io.workID_read).cbc_vec_updated := false.B
+          // LockBank(AESEngine.io.workID_read).is_cbc := false.B
         }
       }.otherwise {
         OutputCount := OutputCount + 1.U
@@ -220,7 +270,6 @@ class Controller(encNum: Int) extends Module {
                            !LockBank(io.slotID_setwork).work_lock
   io.source_addr_dma.bits := SourceAddr
   io.source_addr_dma.valid := SourceAddrValid
-  AESEngine.io.text_in.bits := TextInReg.asTypeOf(Vec(16, UInt(8.W)))
 }
 
 // object Mymain extends App {

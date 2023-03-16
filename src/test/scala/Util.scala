@@ -6,6 +6,11 @@ import chiseltest._
 
 object TestUtil {
 
+  def pokeVec[T <: Data](v: Vec[T], seq: Seq[T]) = {
+    require(v.length == seq.length)
+    v.zip(seq).foreach{case (port, input) => port.poke(input)}
+  }
+
   def initDecoupled(io: Bundle, clk: Clock) = {
     io.elements.foreach { case (name, data) =>
       data match {
