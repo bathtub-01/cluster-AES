@@ -138,9 +138,10 @@ class ControllerAXI extends AXIModule {
     Ctl.io.slotID_key := LiteSlave.key_control_reg(3, 0)
     Ctl.io.destroy.bits := LiteSlave.key_control_reg(7, 4)
     Ctl.io.destroy.valid := LiteSlave.key_control_reg(9) & !LiteSlave.destroy_fired
-    LiteSlave.connect_status_reg(Cat(Ctl.io.destroy.ready,
-                                     Ctl.io.user_key.ready,
-                                     Ctl.io.source_addr_setwork.ready))
+    LiteSlave.connect_status_reg(Cat(Ctl.io.busy, // 18-3
+                                     Ctl.io.destroy.ready, // 2
+                                     Ctl.io.user_key.ready, // 1
+                                     Ctl.io.source_addr_setwork.ready)) //0
     when(Ctl.io.source_addr_setwork.fire) {
       LiteSlave.source_addr_setwork_fired := true.B
     }

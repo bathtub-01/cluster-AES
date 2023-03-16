@@ -36,10 +36,8 @@ class Controller(encNum: Int) extends Module {
     val dest_addr_dma = Decoupled(UInt(32.W))
     // AXI-Stream master
     val fifo_out = Decoupled(UInt(32.W))
-    
-    // Interrupt
-    // val source_interrupt = Output(Bool())
-    // val dest_interrupt = Input(Bool())
+    // busy slot
+    val busy = Output(UInt(16.W))
   })
 
   def risingEdge(x: Bool) = x && !RegNext(x)
@@ -75,21 +73,12 @@ class Controller(encNum: Int) extends Module {
   
   val DestAddr = RegInit(0.U(32.W))
   val DestAddrValid = RegInit(false.B)
-
-  // val InputFireCount = RegInit(0.U(2.W))
   val OutputFireCount = RegInit(0.U(3.W))
-  
-  // val SourceIntReg = RegInit(true.B)
-  // val SourceBeforeTrans = RegInit(false.B)
   val OutputFIFOGuard = RegInit(false.B)
-  // val DestIntReg = RegInit(true.B)
-  // val DestBeforeTrans = RegInit(false.B)
 
-  // io.source_interrupt := SourceIntReg
-  // io.dest_interrupt := DestIntReg
+  io.busy := Cat(LockBank.map(_.work_lock).reverse)
   
   when(io.user_key.fire) {
-    // LockBank(io.slotID_key).key_lock := true.B
     RecentKeySetSlotID := io.slotID_key
     AESEngine.io.user_key.bits := io.user_key.bits
     AESEngine.io.user_key.valid := true.B
@@ -111,17 +100,8 @@ class Controller(encNum: Int) extends Module {
   io.destroy.ready := !LockBank(io.destroy.bits).work_lock & LockBank(io.destroy.bits).key_lock
   io.user_key.ready := AESEngine.io.user_key.ready & !LockBank(io.slotID_key).key_lock & !risingEdge(AESEngine.io.user_key.ready)
 
-  // when(io.fifo_in.fire) {
-  //   InputFireCount := InputFireCount + 1.U
-  //   SourceBeforeTrans := false.B
-  // }
-  // when(InputFireCount === 0.U && !SourceBeforeTrans) {
-  //   SourceIntReg := true.B
-  // }
   when(io.source_addr_dma.fire) {
-    // SourceIntReg := false.B
     SourceAddrValid := false.B
-    // SourceBeforeTrans := true.B
   }
 
   when(io.source_addr_setwork.fire) { // new work comes
@@ -220,7 +200,6 @@ class Controller(encNum: Int) extends Module {
     OutputFireCount := 0.U
     OutputFIFOGuard := false.B
   }
-  // when(DestIntReg && OutputSlotIDDeqWire.valid) {
   when(OutputSlotIDDeqWire.valid && !DestAddrValid) {
     val id = OutputSlotIDDeqWire.deq()
     val addr = DestAddrBank(id)
@@ -231,8 +210,6 @@ class Controller(encNum: Int) extends Module {
   when(io.dest_addr_dma.fire) {
     DestAddrValid := false.B
     OutputFIFOGuard := true.B
-    // DestIntReg := false.B
-    // DestBeforeTrans := true.B
   }
 
   InputFIFO.io.enq <> io.fifo_in
