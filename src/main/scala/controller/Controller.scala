@@ -161,7 +161,7 @@ class Controller(encNum: Int) extends Module {
   AESEngine.io.text_in.valid := CanFeed & LockBank(InputSlotID).cbc_vec_updated
   when(AESEngine.io.text_in.fire) {
     CanFeed := false.B
-    when(LockBank(InputSlotID).is_cbc) {
+    when(LockBank(InputSlotID).is_cbc) { // if the work is in ECB mode, we don't update the cbc at all and leave it as 0 during the work
       LockBank(InputSlotID).cbc_vec_updated := false.B
     }
   }
@@ -227,11 +227,9 @@ class Controller(encNum: Int) extends Module {
       when(OutputCount === 3.U) {
         OutputCount := 0.U
         CanDrag := true.B
-        when(LockBank(AESEngine.io.workID_read).last_group === true.B) { // last group of a work has been finished, reset related lock
+        when(LockBank(AESEngine.io.workID_read).last_group === true.B) { // last group of a work has been finished
           LockBank(AESEngine.io.workID_read).work_lock := false.B
           LockBank(AESEngine.io.workID_read).last_group := false.B
-          // LockBank(AESEngine.io.workID_read).cbc_vec_updated := false.B
-          // LockBank(AESEngine.io.workID_read).is_cbc := false.B
         }
       }.otherwise {
         OutputCount := OutputCount + 1.U

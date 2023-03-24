@@ -7,7 +7,7 @@ import chisel3._
 import chisel3.util._
 
 trait ControllerAXILiteSlave extends AXI4LiteSlaveInterface {
-  lazy val regCount = 9
+  lazy val regCount = 17
   /*AXI register definitions.They must be define as lazy since regmap must be overrided as lazy*/
   lazy val source_addr_setwork_reg = RegInit(0.U(bitsWide.value.W))
   lazy val dest_addr_setwork_reg = RegInit(0.U(bitsWide.value.W))
@@ -22,6 +22,11 @@ trait ControllerAXILiteSlave extends AXI4LiteSlaveInterface {
   lazy val initial_vector_reg1 = RegInit(0.U(bitsWide.value.W))
   lazy val initial_vector_reg2 = RegInit(0.U(bitsWide.value.W))
   lazy val initial_vector_reg3 = RegInit(0.U(bitsWide.value.W))
+  lazy val final_vector_reg0 = RegInit(0.U(bitsWide.value.W))
+  lazy val final_vector_reg1 = RegInit(0.U(bitsWide.value.W))
+  lazy val final_vector_reg2 = RegInit(0.U(bitsWide.value.W))
+  lazy val final_vector_reg3 = RegInit(0.U(bitsWide.value.W))
+
   val source_addr_setwork_fired = RegInit(false.B)
   val user_key_fired = RegInit(false.B)
   val destroy_fired = RegInit(false.B)
@@ -37,14 +42,24 @@ trait ControllerAXILiteSlave extends AXI4LiteSlaveInterface {
                                    9 ->  AXI4LiteWriteReg(initial_vector_reg0),
                                    10 -> AXI4LiteWriteReg(initial_vector_reg1),
                                    11 -> AXI4LiteWriteReg(initial_vector_reg2),
-                                   12 -> AXI4LiteWriteReg(initial_vector_reg3))
+                                   12 -> AXI4LiteWriteReg(initial_vector_reg3),
+                                   13 -> AXI4LiteReadReg(final_vector_reg0),
+                                   14 -> AXI4LiteReadReg(final_vector_reg1),
+                                   15 -> AXI4LiteReadReg(final_vector_reg2),
+                                   16 -> AXI4LiteReadReg(final_vector_reg3))
   def connect_status_reg(in: UInt) = {
     status_reg := in
   }
-  when(currentWriteAddress === 2.U && newDataReceived) {
+  def connect_final_vector(in: Vec[UInt]) = {
+    final_vector_reg0 := in(0)
+    final_vector_reg1 := in(1)
+    final_vector_reg2 := in(2)
+    final_vector_reg3 := in(3)
+  }
+  when(currentWriteAddress === 2.U && newDataReceived) { // setwork_control_reg was written
     source_addr_setwork_fired := false.B
   }
-  when(currentWriteAddress === 7.U && newDataReceived) {
+  when(currentWriteAddress === 7.U && newDataReceived) { // key_control_reg was written
     user_key_fired := false.B
     destroy_fired := false.B
   }
@@ -138,6 +153,7 @@ class ControllerAXI extends AXIModule {
     Ctl.io.source_addr_setwork.valid := LiteSlave.setwork_control_reg(30) & !LiteSlave.source_addr_setwork_fired
     Ctl.io.length_setwork := LiteSlave.setwork_control_reg(25, 0)
     Ctl.io.slotID_setwork := LiteSlave.setwork_control_reg(29, 26)
+    Ctl.io.work_mode := LiteSlave.setwork_control_reg(31)
     Ctl.io.user_key.bits := Cat(LiteSlave.user_key_reg3, 
                                 LiteSlave.user_key_reg2,
                                 LiteSlave.user_key_reg1, 
@@ -146,10 +162,12 @@ class ControllerAXI extends AXIModule {
                                  LiteSlave.initial_vector_reg2,
                                  LiteSlave.initial_vector_reg1,
                                  LiteSlave.initial_vector_reg0).asTypeOf(Vec(4, UInt(32.W)))
+    LiteSlave.connect_final_vector(Ctl.io.final_vector)
     Ctl.io.user_key.valid := LiteSlave.key_control_reg(8) & !LiteSlave.user_key_fired
     Ctl.io.slotID_key := LiteSlave.key_control_reg(3, 0)
     Ctl.io.destroy.bits := LiteSlave.key_control_reg(7, 4)
     Ctl.io.destroy.valid := LiteSlave.key_control_reg(9) & !LiteSlave.destroy_fired
+    Ctl.io.final_vector_select := LiteSlave.key_control_reg(13, 10)
     LiteSlave.connect_status_reg(Cat(Ctl.io.busy, // 18-3
                                      Ctl.io.destroy.ready, // 2
                                      Ctl.io.user_key.ready, // 1

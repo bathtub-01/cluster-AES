@@ -23,3 +23,5 @@ target/
 generated/
 test_run_dir/
 src/main/resources
+
+src/.gitignore
