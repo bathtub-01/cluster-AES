@@ -284,6 +284,6 @@ class ControllerAXI extends AXIModule {
   }
 }
 
-object Mymain extends App {
-  emitVerilog(new ControllerAXI, Array("--target-dir", "generated"))
-}
+// object Mymain extends App {
+//   emitVerilog(new ControllerAXI, Array("--target-dir", "generated"))
+// }

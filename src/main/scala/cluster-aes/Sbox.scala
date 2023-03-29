@@ -5,7 +5,6 @@ import chisel3._
 // TODO: insert more registers in this block maybe
 class AESSBox(isEnc: Boolean) extends Module {
   val io = IO(new Bundle {
-    //val isEnc = Input(Bool())
     val in = Input(UInt(8.W))
     val out = Output(UInt(8.W))
   })
@@ -15,6 +14,20 @@ class AESSBox(isEnc: Boolean) extends Module {
   val mid = SBoxMid(r1)
   val r2 = RegNext(mid, mid)
   val out =  if(isEnc) SBoxAESEncOut(r2) else SBoxAESDecOut(r2)
+  io.out := out
+}
+
+class SM4SBox extends Module {
+  val io = IO(new Bundle {
+    val in = Input(UInt(8.W))
+    val out = Output(UInt(8.W))
+  })
+
+  val st1 = SBoxSM4In(io.in)
+  val r1 = RegNext(st1, st1)
+  val mid = SBoxMid(r1)
+  val r2 = RegNext(mid, mid)
+  val out = SBoxSM4Out(r2)
   io.out := out
 }
 
@@ -252,6 +265,90 @@ object SBoxAESDecOut {
     y( 5) := t(17) ^ t(28)
     y( 6) := t(26) ^ t(29)
     y( 7) := t(13) ^ t(22)
+    y.asUInt
+  }
+}
+
+// top (inner) linear layer for SM4
+object SBoxSM4In {
+  def apply(x: UInt): UInt = {
+    val t = Wire(Vec(7, Bool()))
+    val y = Wire(Vec(21, Bool()))
+    t( 0) := x(3) ^  x( 4)
+    t( 1) := x(2) ^  x( 7)
+    t( 2) := x(7) ^  y(18)
+    t( 3) := x(1) ^  t( 1)
+    t( 4) := x(6) ^  x( 7)
+    t( 5) := x(0) ^  y(18)
+    t( 6) := x(3) ^  x( 6)
+    y( 0) := x(5) ^ ~y(10)
+    y( 1) := t(0) ^  t( 3)
+    y( 2) := x(0) ^  t( 0)
+    y( 3) := x(3) ^  y( 4)
+    y( 4) := x(0) ^  t( 3)
+    y( 5) := x(5) ^  t( 5)
+    y( 6) := x(0) ^ ~x( 1)
+    y( 7) := t(0) ^ ~y(10)
+    y( 8) := t(0) ^  t( 5)
+    y( 9) := x(3)
+    y(10) := x(1) ^  y(18)
+    y(11) := t(0) ^  t( 4)
+    y(12) := x(5) ^  t( 4)
+    y(13) := x(5) ^ ~y( 1)
+    y(14) := x(4) ^ ~t( 2)
+    y(15) := x(1) ^ ~t( 6)
+    y(16) := x(0) ^ ~t( 2)
+    y(17) := t(0) ^ ~t( 2)
+    y(18) := x(2) ^  x( 6)
+    y(19) := x(5) ^ ~y(14)
+    y(20) := x(0) ^  t( 1)
+    y.asUInt
+  }
+}
+
+// bottom (outer) linear layer for SM4
+object SBoxSM4Out {
+  def apply(x: UInt): UInt = {
+    val t = Wire(Vec(30, Bool()))
+    val y = Wire(Vec(8, Bool()))
+    t( 0) := x( 4) ^  x( 7)
+    t( 1) := x(13) ^  x(15)
+    t( 2) := x( 2) ^  x(16)
+    t( 3) := x( 6) ^  t( 0)
+    t( 4) := x(12) ^  t( 1)
+    t( 5) := x( 9) ^  x(10)
+    t( 6) := x(11) ^  t( 2)
+    t( 7) := x( 1) ^  t( 4)
+    t( 8) := x( 0) ^  x(17)
+    t( 9) := x( 3) ^  x(17)
+    t(10) := x( 8) ^  t( 3)
+    t(11) := t( 2) ^  t( 5)
+    t(12) := x(14) ^  t( 6)
+    t(13) := t( 7) ^  t( 9)
+    t(14) := x( 0) ^  x( 6)
+    t(15) := x( 7) ^  x(16)
+    t(16) := x( 5) ^  x(13)
+    t(17) := x( 3) ^  x(15)
+    t(18) := x(10) ^  x(12)
+    t(19) := x( 9) ^  t( 1)
+    t(20) := x( 4) ^  t( 4)
+    t(21) := x(14) ^  t( 3)
+    t(22) := x(16) ^  t( 5)
+    t(23) := t( 7) ^  t(14)
+    t(24) := t( 8) ^  t(11)
+    t(25) := t( 0) ^  t(12)
+    t(26) := t(17) ^  t( 3)
+    t(27) := t(18) ^  t(10)
+    t(28) := t(19) ^  t( 6)
+    t(29) := t( 8) ^  t(10)
+    y( 0) := t(11) ^ ~t(13)
+    y( 1) := t(15) ^ ~t(23)
+    y( 2) := t(20) ^  t(24)
+    y( 3) := t(16) ^  t(25)
+    y( 4) := t(26) ^ ~t(22)
+    y( 5) := t(21) ^  t(13)
+    y( 6) := t(27) ^ ~t(12)
+    y( 7) := t(28) ^ ~t(29)
     y.asUInt
   }
 }
