@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 
+import utils.AESSBox
 object Rcon {
   val rcon: Seq[Int] = Seq(
     0x01, 0x02, 0x04, 0x08,
