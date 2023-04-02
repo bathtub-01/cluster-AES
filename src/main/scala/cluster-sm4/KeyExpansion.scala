@@ -44,6 +44,7 @@ class KeyExpansion extends Module {
     }
     Running := true.B
   }
+  
   when(Running) {
     PipelineCounter := PipelineCounter + 1.U
     when(PipelineCounter === 3.U) {
