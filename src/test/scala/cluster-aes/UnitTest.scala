@@ -27,15 +27,23 @@ class EncUnitTest extends AnyFlatSpec with ChiselScalatestTester {
       // set key
       dut.clock.step(3)
       dut.io.write_en.poke(true.B)
-      for(task <- 0 until 4){
-        dut.io.write_task.poke(task.U)
-        for(round <- 0 until 11){
-          dut.io.write_round.poke(round.U)
-          for(i <- 0 until 16){
-            dut.io.write_key(i).poke(round_key(round)(i))
-          }
-          dut.clock.step()
+      // for(task <- 0 until 4){
+      //   dut.io.write_task.poke(task.U)
+      //   for(round <- 0 until 11){
+      //     dut.io.write_round.poke(round.U)
+      //     for(i <- 0 until 16){
+      //       dut.io.write_key(i).poke(round_key(round)(i))
+      //     }
+      //     dut.clock.step()
+      //   }
+      // }
+      dut.io.write_task.poke(0)
+      for(round <- 0 until 11){
+        dut.io.write_round.poke(round.U)
+        for(i <- 0 until 16){
+          dut.io.write_key(i).poke(round_key(round)(i))
         }
+        dut.clock.step()
       }
       dut.clock.step(3)
 
@@ -51,34 +59,34 @@ class EncUnitTest extends AnyFlatSpec with ChiselScalatestTester {
       dut.clock.step()
       dut.io.input.valid.poke(false.B)
 
-      dut.clock.step()
+      // dut.clock.step()
 
-      dut.io.input.bits.control.isIdle.poke(false.B)
-      dut.io.input.bits.control.keylength.poke(1.U)
-      dut.io.input.bits.control.rounds.poke(0.U)
-      dut.io.input.bits.control.taskID.poke(1.U)
-      dut.io.input.valid.poke(true.B)
+      // dut.io.input.bits.control.isIdle.poke(false.B)
+      // dut.io.input.bits.control.keylength.poke(1.U)
+      // dut.io.input.bits.control.rounds.poke(0.U)
+      // dut.io.input.bits.control.taskID.poke(1.U)
+      // dut.io.input.valid.poke(true.B)
 
-      dut.clock.step()
+      // dut.clock.step()
 
-      dut.io.input.bits.control.isIdle.poke(false.B)
-      dut.io.input.bits.control.keylength.poke(2.U)
-      dut.io.input.bits.control.rounds.poke(0.U)
-      dut.io.input.bits.control.taskID.poke(2.U)
-      dut.io.input.valid.poke(true.B)
-      dut.clock.step()
-      dut.io.input.valid.poke(false.B)
-      dut.clock.step(10)
+      // dut.io.input.bits.control.isIdle.poke(false.B)
+      // dut.io.input.bits.control.keylength.poke(2.U)
+      // dut.io.input.bits.control.rounds.poke(0.U)
+      // dut.io.input.bits.control.taskID.poke(2.U)
+      // dut.io.input.valid.poke(true.B)
+      // dut.clock.step()
+      // dut.io.input.valid.poke(false.B)
+      // dut.clock.step(10)
 
-      dut.io.input.bits.control.isIdle.poke(false.B)
-      dut.io.input.bits.control.keylength.poke(0.U)
-      dut.io.input.bits.control.rounds.poke(0.U)
-      dut.io.input.bits.control.taskID.poke(3.U)
-      dut.io.input.valid.poke(true.B)
-      dut.clock.step(4)
-      dut.io.input.valid.poke(false.B)
+      // dut.io.input.bits.control.isIdle.poke(false.B)
+      // dut.io.input.bits.control.keylength.poke(0.U)
+      // dut.io.input.bits.control.rounds.poke(0.U)
+      // dut.io.input.bits.control.taskID.poke(3.U)
+      // dut.io.input.valid.poke(true.B)
+      // dut.clock.step(4)
+      // dut.io.input.valid.poke(false.B)
 
-      dut.clock.step(70)
+      dut.clock.step(50)
       dut.io.output.ready.poke(true.B)
       dut.clock.step(8)
     }

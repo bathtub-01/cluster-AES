@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 
-import utils.AESSBox
+import utils._
 class SubBytes(isEnc: Boolean) extends Module {
   val pipeline_layer = 3
   val io = IO(new Bundle {

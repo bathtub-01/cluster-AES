@@ -44,7 +44,7 @@ class KeyExpansion extends Module {
     }
     Running := true.B
   }
-  
+
   when(Running) {
     PipelineCounter := PipelineCounter + 1.U
     when(PipelineCounter === 3.U) {
@@ -66,8 +66,4 @@ class KeyExpansion extends Module {
   }
   io.write_round.bits := RoundIter
   io.roundKey := KeyWord(0) ^ KLinearTransModule.io.output
-}
-
-object Mymain extends App {
-  emitVerilog(new KeyExpansion, Array("--target-dir", "generated"))
 }

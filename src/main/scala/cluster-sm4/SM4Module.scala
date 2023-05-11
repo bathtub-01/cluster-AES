@@ -76,7 +76,9 @@ class SM4Module extends Module {
   io.read_round := Mux(ReadKeySelectWire.isEnc, ReadKeySelectWire.rounds,
                                                 31.U - ReadKeySelectWire.rounds)
   io.read_task := ReadKeySelectWire.taskID
-
-  // ad-hoc code
-  io.complete_taskID := 1.U
+  io.complete_taskID := PipelineReg3.control.taskID
 }
+
+// object Mymain extends App {
+//   emitVerilog(new SM4Module, Array("--target-dir", "generated"))
+// }

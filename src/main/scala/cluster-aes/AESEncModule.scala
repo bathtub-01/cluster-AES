@@ -30,10 +30,17 @@ class AESEncModule extends Engine {
   RoundAddsOne := AddRoundKeyModule.io.para_out
   RoundAddsOne.control.rounds := AddRoundKeyModule.io.para_out.control.rounds + 1.U
 
-  TmpValue := Mux(AddRoundKeyModule.io.para_out.control.isIdle,
-                  IdleValue, Mux(isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
-                                              AddRoundKeyModule.io.para_out.control.rounds),
-                                 IdleValue, RoundAddsOne))
+  // TmpValue := Mux(AddRoundKeyModule.io.para_out.control.isIdle,
+  //                 IdleValue, Mux(isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
+  //                                             AddRoundKeyModule.io.para_out.control.rounds),
+  //                                IdleValue, RoundAddsOne))
+  when(AddRoundKeyModule.io.para_out.control.isIdle ||
+       isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
+                    AddRoundKeyModule.io.para_out.control.rounds)) {
+    TmpValue := IdleValue
+  }.otherwise {
+    TmpValue := RoundAddsOne
+  }
 
   SubBytesModule.io.para_in := TmpValue
 
@@ -66,5 +73,5 @@ class AESEncModule extends Engine {
 }
 
 // object Mymain extends App {
-//   emitVerilog(new AES, Array("--target-dir", "generated"))
+//   emitVerilog(new AESEncModule, Array("--target-dir", "generated"))
 // }

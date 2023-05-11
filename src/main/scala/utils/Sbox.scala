@@ -1,8 +1,33 @@
+/*
+    The SBox's circuit implementation in this file 
+      comes from https://github.com/chipsalliance/rocket-chip/pull/2950/
+    Author: https://github.com/ZenithalHourlyRate
+    Below is the License information from the original file
+*/
+
+// SPDX-License-Identifier: Apache-2.0
+//
+//  This is translated from https://github.com/riscv/riscv-crypto
+//
+//    2020-01-29    Markku-Juhani O. Saarinen <mjos@pqshield.com>
+//    Copyright (c) 2020, PQShield Ltd. All rights reserved.
+//    Converted to Chisel in 2022
+
+/*
+    [BoPe12] Boyar J., Peralta R. "A Small Depth-16 Circuit for the AES
+    S-Box." Proc.SEC 2012. IFIP AICT 376. Springer, pp. 287-298 (2012)
+    DOI: https://doi.org/10.1007/978-3-642-30436-1_24
+    Preprint: https://eprint.iacr.org/2011/332.pdf
+    [Ny93] Nyberg K., "Differentially Uniform Mappings for Cryptography",
+    Proc. EUROCRYPT '93, LNCS 765, Springer, pp. 55-64 (1993)
+    DOI: https://doi.org/10.1007/3-540-48285-7_6
+*/
+
 package utils
 
 import chisel3._
 
-// TODO: insert more registers in this block maybe
+// inserted registers will cause a two-circle delay
 class AESSBox(isEnc: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(8.W))
@@ -10,9 +35,9 @@ class AESSBox(isEnc: Boolean) extends Module {
   })
 
   val st1 = if(isEnc) SBoxAESEncIn(io.in) else SBoxAESDecIn(io.in)
-  val r1 = RegNext(st1, st1)
+  val r1 = RegNext(st1)
   val mid = SBoxMid(r1)
-  val r2 = RegNext(mid, mid)
+  val r2 = RegNext(mid)
   val out =  if(isEnc) SBoxAESEncOut(r2) else SBoxAESDecOut(r2)
   io.out := out
 }
@@ -107,70 +132,70 @@ object SBoxMid {
   def apply(x: UInt): UInt = {
     val t = Wire(Vec(46, Bool()))
     val y = Wire(Vec(18, Bool()))
-    t( 0) := x( 3) ^ x(12)
-    t( 1) := x( 9) & x( 5)
-    t( 2) := x(17) & x( 6)
-    t( 3) := x(10) ^ t( 1)
-    t( 4) := x(14) & x( 0)
-    t( 5) := t( 4) ^ t( 1)
-    t( 6) := x( 3) & x(12)
-    t( 7) := x(16) & x( 7)
-    t( 8) := t( 0) ^ t( 6)
-    t( 9) := x(15) & x(13)
-    t(10) := t( 9) ^ t( 6)
-    t(11) := x( 1) & x(11)
-    t(12) := x( 4) & x(20)
-    t(13) := t(12) ^ t(11)
-    t(14) := x( 2) & x( 8)
-    t(15) := t(14) ^ t(11)
-    t(16) := t( 3) ^ t( 2)
-    t(17) := t( 5) ^ x(18)
-    t(18) := t( 8) ^ t( 7)
-    t(19) := t(10) ^ t(15)
-    t(20) := t(16) ^ t(13)
-    t(21) := t(17) ^ t(15)
-    t(22) := t(18) ^ t(13)
-    t(23) := t(19) ^ x(19)
-    t(24) := t(22) ^ t(23)
-    t(25) := t(22) & t(20)
-    t(26) := t(21) ^ t(25)
-    t(27) := t(20) ^ t(21)
-    t(28) := t(23) ^ t(25)
-    t(29) := t(28) & t(27)
-    t(30) := t(26) & t(24)
-    t(31) := t(20) & t(23)
-    t(32) := t(27) & t(31)
-    t(33) := t(27) ^ t(25)
-    t(34) := t(21) & t(22)
-    t(35) := t(24) & t(34)
-    t(36) := t(24) ^ t(25)
-    t(37) := t(21) ^ t(29)
-    t(38) := t(32) ^ t(33)
-    t(39) := t(23) ^ t(30)
-    t(40) := t(35) ^ t(36)
-    t(41) := t(38) ^ t(40)
-    t(42) := t(37) ^ t(39)
-    t(43) := t(37) ^ t(38)
-    t(44) := t(39) ^ t(40)
-    t(45) := t(42) ^ t(41)
-    y( 0) := t(38) & x( 7)
-    y( 1) := t(37) & x(13)
-    y( 2) := t(42) & x(11)
-    y( 3) := t(45) & x(20)
-    y( 4) := t(41) & x( 8)
-    y( 5) := t(44) & x( 9)
-    y( 6) := t(40) & x(17)
-    y( 7) := t(39) & x(14)
-    y( 8) := t(43) & x( 3)
-    y( 9) := t(38) & x(16)
-    y(10) := t(37) & x(15)
-    y(11) := t(42) & x( 1)
-    y(12) := t(45) & x( 4)
-    y(13) := t(41) & x( 2)
-    y(14) := t(44) & x( 5)
-    y(15) := t(40) & x( 6)
-    y(16) := t(39) & x( 0)
-    y(17) := t(43) & x(12)
+    t( 0) := x( 3) ^ x(12) //1
+    t( 1) := x( 9) & x( 5) //1
+    t( 2) := x(17) & x( 6) //1
+    t( 3) := x(10) ^ t( 1) //2
+    t( 4) := x(14) & x( 0) //1
+    t( 5) := t( 4) ^ t( 1) //2
+    t( 6) := x( 3) & x(12) //1
+    t( 7) := x(16) & x( 7) //1
+    t( 8) := t( 0) ^ t( 6) //2
+    t( 9) := x(15) & x(13) //1
+    t(10) := t( 9) ^ t( 6) //2
+    t(11) := x( 1) & x(11) //1
+    t(12) := x( 4) & x(20) //1
+    t(13) := t(12) ^ t(11) //2
+    t(14) := x( 2) & x( 8) //1
+    t(15) := t(14) ^ t(11) //2
+    t(16) := t( 3) ^ t( 2) //3
+    t(17) := t( 5) ^ x(18) //3
+    t(18) := t( 8) ^ t( 7) //3
+    t(19) := t(10) ^ t(15) //3
+    t(20) := t(16) ^ t(13) //4
+    t(21) := t(17) ^ t(15) //4
+    t(22) := t(18) ^ t(13) //4
+    t(23) := t(19) ^ x(19) //4
+    t(24) := t(22) ^ t(23) //5
+    t(25) := t(22) & t(20) //5
+    t(26) := t(21) ^ t(25) //6
+    t(27) := t(20) ^ t(21) //5
+    t(28) := t(23) ^ t(25) //6
+    t(29) := t(28) & t(27) //7
+    t(30) := t(26) & t(24) //7
+    t(31) := t(20) & t(23) //5
+    t(32) := t(27) & t(31) //6
+    t(33) := t(27) ^ t(25) //6
+    t(34) := t(21) & t(22) //5
+    t(35) := t(24) & t(34) //6
+    t(36) := t(24) ^ t(25) //6
+    t(37) := t(21) ^ t(29) //8
+    t(38) := t(32) ^ t(33) //7
+    t(39) := t(23) ^ t(30) //8
+    t(40) := t(35) ^ t(36) //7
+    t(41) := t(38) ^ t(40) //8
+    t(42) := t(37) ^ t(39) //9
+    t(43) := t(37) ^ t(38) //9
+    t(44) := t(39) ^ t(40) //9
+    t(45) := t(42) ^ t(41) //10
+    y( 0) := t(38) & x( 7) //8
+    y( 1) := t(37) & x(13) //9
+    y( 2) := t(42) & x(11) //10
+    y( 3) := t(45) & x(20) //11
+    y( 4) := t(41) & x( 8) //9
+    y( 5) := t(44) & x( 9) //10
+    y( 6) := t(40) & x(17) //8
+    y( 7) := t(39) & x(14) //9
+    y( 8) := t(43) & x( 3) //10
+    y( 9) := t(38) & x(16) //8
+    y(10) := t(37) & x(15) //9
+    y(11) := t(42) & x( 1) //10
+    y(12) := t(45) & x( 4) //11
+    y(13) := t(41) & x( 2) //9
+    y(14) := t(44) & x( 5) //10
+    y(15) := t(40) & x( 6) //8
+    y(16) := t(39) & x( 0) //9
+    y(17) := t(43) & x(12) //10
     y.asUInt
   }
 }

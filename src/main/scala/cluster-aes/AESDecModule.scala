@@ -34,9 +34,15 @@ class AESDecModule extends Engine {
   RoundSubsOne := AddRoundKeyModule.io.para_out
   RoundSubsOne.control.rounds := AddRoundKeyModule.io.para_out.control.rounds - 1.U
 
-  TmpValue := Mux(AddRoundKeyModule.io.para_out.control.isIdle,
-                  IdleValue, Mux(isFinalRound(AddRoundKeyModule.io.para_out.control.rounds),
-                                 IdleValue, RoundSubsOne))
+  // TmpValue := Mux(AddRoundKeyModule.io.para_out.control.isIdle,
+  //                 IdleValue, Mux(isFinalRound(AddRoundKeyModule.io.para_out.control.rounds),
+  //                                IdleValue, RoundSubsOne))
+  when(AddRoundKeyModule.io.para_out.control.isIdle ||
+       isFinalRound(AddRoundKeyModule.io.para_out.control.rounds)) {
+    TmpValue := IdleValue
+  }.otherwise {
+    TmpValue := RoundSubsOne
+  }
 
   InvMixColumnsModule.io.para_in := TmpValue
 
