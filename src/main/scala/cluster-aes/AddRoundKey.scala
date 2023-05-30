@@ -2,7 +2,6 @@ package clusterAES
 
 import chisel3._
 
-// Don't need to put registers here since the circuit is too simple.
 class AddRoundKey extends Module {
   val io = IO(new Bundle {
     val para_in = Input(new Para)

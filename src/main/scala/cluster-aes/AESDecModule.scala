@@ -28,15 +28,13 @@ class AESDecModule extends Engine {
                                         (new ControlInfomation).Lit(_.isIdle -> true.B, _.keylength -> 0.U,
                                                                         _.rounds -> 0.U, _.taskID -> 0.U))
 
+  // supports AES-128, AES-192 and AES-256                                                                        
   def isFirstRound(keylength: UInt, rounds: UInt): Bool = (rounds - 9.U) / 2.U === keylength
   def isFinalRound(rounds: UInt): Bool = rounds === 0.U
 
   RoundSubsOne := AddRoundKeyModule.io.para_out
   RoundSubsOne.control.rounds := AddRoundKeyModule.io.para_out.control.rounds - 1.U
 
-  // TmpValue := Mux(AddRoundKeyModule.io.para_out.control.isIdle,
-  //                 IdleValue, Mux(isFinalRound(AddRoundKeyModule.io.para_out.control.rounds),
-  //                                IdleValue, RoundSubsOne))
   when(AddRoundKeyModule.io.para_out.control.isIdle ||
        isFinalRound(AddRoundKeyModule.io.para_out.control.rounds)) {
     TmpValue := IdleValue

@@ -25,15 +25,12 @@ class AESEncModule extends Engine {
   val Buffer = RegNext(ShiftRowsModule.io.para_out, IdleValue)
   val InputDelay = RegNext(io.input.bits, IdleValue)
 
+  // supports AES-128, AES-192 and AES-256
   def isFinalRound(keylength: UInt, rounds: UInt): Bool = (rounds - 10.U) / 2.U === keylength
 
   RoundAddsOne := AddRoundKeyModule.io.para_out
   RoundAddsOne.control.rounds := AddRoundKeyModule.io.para_out.control.rounds + 1.U
 
-  // TmpValue := Mux(AddRoundKeyModule.io.para_out.control.isIdle,
-  //                 IdleValue, Mux(isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
-  //                                             AddRoundKeyModule.io.para_out.control.rounds),
-  //                                IdleValue, RoundAddsOne))
   when(AddRoundKeyModule.io.para_out.control.isIdle ||
        isFinalRound(AddRoundKeyModule.io.para_out.control.keylength,
                     AddRoundKeyModule.io.para_out.control.rounds)) {

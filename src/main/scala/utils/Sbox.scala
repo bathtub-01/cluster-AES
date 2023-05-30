@@ -27,7 +27,7 @@ package utils
 
 import chisel3._
 
-// inserted registers will cause a two-circle delay
+// inserted registers will cause a two-cycle delay
 class AESSBox(isEnc: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(8.W))

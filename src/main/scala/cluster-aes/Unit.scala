@@ -18,9 +18,8 @@ class Unit(isEnc: Boolean) extends Module {
   
   val InPara = Reg(Vec(4, new Para))
   val OutState = Reg(Vec(4, Vec(16, UInt(8.W))))
-  // USE THIS TO CONTROL INPUT TRAFFIC!
-  val Active = RegInit(VecInit(Seq.fill(4)(false.B))) // tell InArbiter the input is ready
-  val Busy = RegInit(VecInit(Seq.fill(4)(false.B))) // tell outside world this slot is running
+  val Active = RegInit(VecInit(Seq.fill(4)(false.B)))
+  val Busy = RegInit(VecInit(Seq.fill(4)(false.B))) 
   val Completed = RegInit(VecInit(Seq.fill(4)(false.B)))
 
   val KeyBankModule = Module(new KeyBank)

@@ -1,9 +1,16 @@
+/*
+    The implementation in this file 
+      comes from https://github.com/chipsalliance/rocket-chip/pull/2950/
+    Author: https://github.com/ZenithalHourlyRate
+    Below is the License information from the original file
+*/
+
+// SPDX-License-Identifier: Apache-2.0
 package clusterAES
 
 import chisel3._
 import chisel3.util._
 
-// For now only consider encryption.
 
 // Generator for multiplier on GF(2^8). (Multiply input by y)
 class GFMul(y: Int) extends Module {
