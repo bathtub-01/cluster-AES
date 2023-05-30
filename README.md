@@ -1,19 +1,19 @@
 # A Pipelined AES and SM4 Hardware Implementation for Multi-Tasking Virtualized Environments
 
-This repository contains the Chisel implementations of AES and SM4 cryptographic algorithm.
+This repository contains Chisel implementations of the AES and SM4 cryptographic algorithms.
 
-The designs adopt a round-based, four-staged pipeline structure. The main advantage of our designs is that it can support tasks from different guests (corresponding to different user keys) to be processed in parallel through the pipeline, offering good flexibility and hardware utilization rate in virutalized environments, where parallelism support in hardware level is often emphasized.
+The designs feature a round-based, four-stage pipeline structure. The main advantage of our designs is their ability to support tasks from different guests (corresponding to different user keys) processed in parallel through the pipeline. This offers better flexibility and hardware utilization rates in virtualized environments, where hardware-level parallelism support is often emphasized.
 
-To generate the Verilog code for a standalone AES/SM4 module, run one of the following command, where `aes-enc` for AES encryption module, `aes-dec` for AES decryption module and `sm4` for SM4 module. The Verilog code will be generated under `./generated/`
+To generate the Verilog code for a standalone AES/SM4 module, execute one of the following commands, where `aes-enc` corresponds to the AES encryption module, `aes-dec` to the AES decryption module, and `sm4` to the SM4 module. The generated Verilog code will be located in the `./generated/` directory:
 ```
 sbt "run aes-enc"
 sbt "run aes-dec"
 sbt "run sm4"
 ```
 
-It is also possible to generate a "group" for AES or SM4, which contains four instances of the corresponding cryptograhic modules. To do this, run:
+You can also generate a "group" for AES or SM4, which contains four instances of the corresponding cryptographic modules. To do this, execute:
 ```
 sbt "run group-aes"
 sbt "run group-sm4"
 ```
-and specify the number of encryption modules within the group. The rest modules will be decryption ones.
+and specify the number of encryption modules within the group. The remaining modules will be decryption ones.
