@@ -1,6 +1,4 @@
-# A Pipelined AES and SM4 Hardware Implementation for Multi-Tasking Virtualized Environments
-
-This repository contains Chisel implementations of the AES and SM4 cryptographic algorithms.
+This repository contains Chisel implementations of the AES and SM4 cryptographic algorithms. It is the work from paper "A Pipelined AES and SM4 Hardware Implementation for Multi-Tasking Virtualized Environments" accepted by ICA3PP 2023. Preprint available at https://easychair.org/publications/preprint/BNHg.
 
 The designs feature a round-based, four-stage pipeline structure. The main advantage of our designs is their ability to support tasks from different guests (corresponding to different user keys) processed in parallel through the pipeline. This offers better flexibility and hardware utilization rates in virtualized environments, where hardware-level parallelism support is often emphasized.
 
